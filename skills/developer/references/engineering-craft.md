@@ -104,6 +104,8 @@ Worked micro-example:
 
 Anti-patterns: changing several things and re-testing ("shotgun debugging"), fixing where the error *appears* instead of where it *originates*, and declaring victory after one manual pass without a regression test.
 
+**Minimal-change rule for bug fixes:** fix with the smallest reasonable diff. Never rewrite a working part as a side effect of a fix — a fix that also restructures invites new defects and makes the change unreviewable. If the right fix is structural (the root cause is the design, not a line), stop: record it and route it as its own change — a refactor or architecture task with its own tests and review — instead of smuggling it into the bug fix.
+
 ## 7. Performance Hygiene
 
 - **Measure before optimizing.** Profile/timing first; the bottleneck is rarely where intuition says. An optimization without a before/after measurement is a guess wearing a costume.

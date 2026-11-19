@@ -137,7 +137,7 @@ URL/account differs); and **never** use real users' data for testing.
 
 ## 7. Light DORA (measure to improve, not to report)
 
-Track only 2–4 numbers, recorded monthly, and watch the trend:
+Track the current **five** DORA metrics, recorded monthly, and watch the trend:
 - **Deployment Frequency:** how many production releases in the month — steady,
   small, and frequent usually beats rare, huge batches for safety.
 - **Lead Time for Changes:** from code approval to running in production — an
@@ -146,8 +146,31 @@ Track only 2–4 numbers, recorded monthly, and watch the trend:
 - **Change Failure Rate:** the share of releases that cause an incident or need a
   rollback — the most important number for this gate; a continuous rise is the
   signal to tighten the checklist/smoke test.
-- **Time to Restore:** from incident to restoration — measurable thanks to having
-  a good rollback plan.
+- **Failed-Deployment Recovery Time:** from a failed or degraded deployment to
+  the service being restored (rollback or fix) — measurable thanks to having a
+  good rollback plan.
+- **Deployment Rework Rate:** the share of deployments that are themselves
+  unplanned rework — hotfixes and re-deploys fixing a previous deployment. A
+  rising rework rate means the pipeline is producing work about its own work.
 
 Never use these numbers to compare different projects against each other; only
 compare against yourself over time.
+
+**DORA's AI-era findings (2025 research — the current benchmark):** AI
+assistance **amplifies** whatever delivery system it lands in. Throughput rises,
+but stability suffers unless the surrounding practices are strong — the
+capabilities that separate teams gaining from AI from teams destabilized by it
+include **small batches**, **strong version-control discipline**, and a
+**quality internal platform** (reliable environments, fast feedback, paved
+paths). Read against this OS: the gates, the small-batch habit, and the
+verification steps are not overhead on top of AI speed — they are the mechanism
+that keeps the stability metrics above from degrading as throughput rises.
+
+**Expectation setting — the verification tax and the J-curve:** adopting
+AI-assisted development (or this OS) typically *slows* a team before it speeds
+it up: output volume grows faster than review capacity, so human verification
+time per change rises (the verification tax), and delivery performance often
+dips for the first weeks-to-months before recovering above the starting point
+(the J-curve). Plan for it: judge the process on a quarter's trend, not the
+first fortnight, and never respond to the dip by cutting the verification steps
+— that converts a temporary dip into a permanent stability problem.

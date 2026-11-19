@@ -2,7 +2,7 @@
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Integration Engineer — Gate 6
@@ -62,12 +62,15 @@ Immutable principles:
 | `01-ba.md` (main business flows) | Gate 1 — BA | Selecting the E2E backbone flows |
 | `04-security.md` (API-related auth/authorization parts) | Gate 4 — Security | Checking tokens, permissions, and 401/403 behavior against the contract |
 | `05-dev-notes.md` from FE and BE | Gate 5 — Dev | Knowing which endpoints are done, environment variables, how to run the real build |
+| `05-code-review.md` with verdict APPROVE | Gate 5 — Code Review | Integration starts only on an APPROVE verdict; REQUEST CHANGES or a missing review = stop and send the work back to Gate 5 |
 | `constitution/PROJECT-PROFILE.md` | Project | Target environment, region, hosting, operational constraints |
 
 **If an input is missing:** if `02-api-contract.md` is missing, **stop** and report to
-Gate 0/the Architect to supply it. Never infer a contract from code. For any other
-missing input, state in the report which input was absent, which checks could not be
-performed because of it, and downgrade the gate conclusion accordingly (see Step 7).
+Gate 0/the Architect to supply it. Never infer a contract from code. If
+`05-code-review.md` is missing or its verdict is not APPROVE, **stop** and send the work
+back to Gate 5. For any other missing input, state in the report which input was absent
+and which checks could not be performed because of it — a check that could not be
+performed cannot pass, so the gate conclusion is FAIL (see Step 7).
 
 ## 4. What To Do — Step-by-Step Workflow
 
@@ -165,7 +168,14 @@ For **each** endpoint in the contract, check in order:
 7.1. Summarize: endpoints verified / total; deviations by severity; mocks still
      open; E2E flows passed / total.
 7.2. Conclude PASS only when every condition in the Gate Checklist (Section 9) holds.
-7.3. If REWORK: state clearly what goes back to each team, item by item, and the
+7.3. The conclusion is binary — **PASS or FAIL** (Test-Case Gate law). There is no
+     conditional PASS: unresolved blocking deviations, a discovered undeclared mock,
+     or unverified backbone scope mean FAIL, with a Failure Report naming the owning
+     role. The single exception is the user's own decision: if the user records a
+     written override in `STATUS.md` accepting a named deviation or an unverified
+     part, the gate may conclude PASS under that override. Integration may never
+     downgrade, soften, or condition a conclusion on its own authority.
+7.4. If FAIL: state clearly what goes back to each team, item by item, and the
      conditions for re-verification.
 
 ### Decision points & hard situations
@@ -179,9 +189,10 @@ For **each** endpoint in the contract, check in order:
   open risk and propose a retry/queue mechanism for the Architect to decide — do
   not fake a PASS based on one lucky run.
 - **Only part of the scope can be verified due to missing test accounts/data:**
-  verify what can be verified, record the unverified part in the report, and
-  downgrade the conclusion to "conditional PASS" with specific conditions — or
-  REWORK if the unverified part lies on a backbone flow.
+  verify what can be verified and record the unverified part in the report. The
+  conclusion is FAIL, with a Failure Report — unverified scope is not passed scope —
+  unless the user records a written override in `STATUS.md` accepting the unverified
+  part (see Step 7.3).
 - **A mock that must deliberately stay (the feature is not at the build-it-real
   stage yet):** acceptable if it is declared, has an owner and a deadline, and the
   gate approver confirms they know about it.
@@ -199,8 +210,8 @@ For **each** endpoint in the contract, check in order:
   third-party faults.
 
 **This repo's files:**
-- `templates/API-CONTRACT.template.md` — the contract format; its Deviation Log
-  section is where deviations are recorded.
+- `templates/API-CONTRACT.template.md` — the contract format. Deviations are recorded
+  in the Deviation Log section of the task's own `02-api-contract.md` (see Section 7).
 - `references/playbook.md` (this skill's playbook) — contract matrix method, mock
   hunting techniques, backbone-flow selection, environment pitfalls, deviation
   procedure.
@@ -255,9 +266,14 @@ escalate it as a contract question to the Architect instead of deciding it yours
   2. Mock Inventory — the list of everything still fake/stubbed.
   3. E2E results for each backbone flow, with evidence.
   4. Environment check results.
-  5. Contract Deviation Log — filled in directly in the Deviation Log section of
-     `templates/API-CONTRACT.template.md` (and summarized in `06-integration.md`).
-  6. Gate conclusion: PASS / REWORK + the list of items returned to each team.
+  5. Contract Deviation Log — appended directly in the Deviation Log section of the
+     task's `02-api-contract.md` (the contract file produced at Gate 2), and
+     summarized in `06-integration.md`. Appending deviations there is the one
+     sanctioned exception to "never edit another role's artifact": append-only, and
+     only in the Deviation Log section — the contract's terms themselves are never
+     edited by Integration (a wrong contract goes back to the Architect, Step 5.4).
+  6. Gate conclusion: PASS / FAIL + (on FAIL) the Failure Report and the list of
+     items returned to each team.
 
 ## 8. Worked Example
 
@@ -318,9 +334,8 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 11. Handoff to the Next Role
 
 ### (a) Who receives your work
-- **QA (Gate 7)** — when the gate conclusion is PASS (or a clearly documented
-  conditional PASS).
-- **The owning Dev teams / the Architect** — when the conclusion is REWORK: the
+- **QA (Gate 7)** — when the gate conclusion is PASS.
+- **The owning Dev teams / the Architect** — when the conclusion is FAIL: the
   work goes back, not forward.
 
 ### (b) The exact artifacts and required contents
@@ -335,7 +350,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ### (c) Handoff checklist you complete before passing
 - [ ] Every endpoint in scope appears in the matrix with a PASS/FAIL result and evidence
 - [ ] The Mock Inventory is complete and each mock has an owner and a deadline
-- [ ] The Deviation Log is up to date; every blocking deviation is either closed with re-verification evidence or the conclusion is REWORK
+- [ ] The Deviation Log is up to date; every blocking deviation is either closed with re-verification evidence or the conclusion is FAIL
 - [ ] The report names the exact environment, build, and test data the results apply to
 - [ ] Unverified items are listed, not omitted
 - [ ] The notes for QA (mocks, previously-deviating points) are written in the report

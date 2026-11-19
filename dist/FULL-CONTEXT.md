@@ -50,12 +50,21 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 10. **Test-Case Gate (hard stop):** Every gate defines its test cases up front and runs all of them.
     The next gate starts ONLY at 100% PASS. A single FAIL stops the workflow: write a Failure Report
     (`templates/FAILURE-REPORT.template.md`) — what failed, expected vs. actual, evidence, suspected cause,
-    owning role, proposed fix — and surface it to the user before doing anything else. Never skip, weaken,
+    owning role, proposed fix — and surface it to the user before doing anything else. A fix is verified by
+    re-running the failed case AND the full gate suite. Never skip, weaken,
     or quietly work around a failing test case (see `workflow/MASTER-WORKFLOW.md`).
 11. **Exhaustive input processing:** The user's instructions are often long and detailed. At Gate 0, decompose
     them item by item into a Requirement Inventory and run a coverage check against the original text
     (protocol in `skills/orchestrator-intake/SKILL.md`): every clause becomes a requirement, a clarifying
     question, or an explicit out-of-scope note. Nothing is dropped or summarized away silently.
+12. **Approvals inside a task:** Gate approvals are not the only approvals. Mid-task, pause and ask the user
+    BEFORE: (i) a significant architecture change, (ii) deleting or overwriting data, (iii) a risky database
+    change, (iv) using a paid or cost-incurring service, (v) a disruptive change to a running system.
+    One decision per approval request, with the evidence attached — never batch unrelated approvals into a
+    single yes/no (bundled approvals get rubber-stamped, and a rubber stamp is not a decision).
+13. **Resume protocol:** At the start of any session on an existing task, first reconstruct where the task
+    stands from its task folder — `STATUS.md`, the artifacts present, and the gate verdicts recorded — and
+    state the next action before doing anything. Never restart a task from memory or from chat history alone.
 
 ## Quick Map — what to read when
 
@@ -81,6 +90,10 @@ tasks/<YYYY-MM-DD>-<slug>/
 ```
 Files outside a task's routing are not created — and the Routing Decision must state why each skipped role was skipped.
 
+**ADRs do not live in the task folder.** Architecture Decision Records are project-durable and belong in the project repo (`docs/adr/` or `adr/`); the task folder only references them by ID.
+
+**`constitution/PROJECT-PROFILE.md` is maintained by the Orchestrator.** At task close, the Orchestrator proposes profile updates drawn from the task's retrospective; the user approves them before anything is written.
+
 
 ---
 
@@ -93,14 +106,15 @@ Files outside a task's routing are not created — and the Routing Decision must
 3. **One artifact per stage.** No handover file = the stage is not done.
 4. **Maker ≠ Checker.** Nobody approves their own work.
 5. **Evidence over claims.** Every "done" must be independently verifiable.
-6. **Humans keep decision rights at gates and at irreversible actions** (commit, push, deploy, delete, send, pay).
+6. **Humans keep decision rights at gates and at irreversible actions** (commit, push, deploy, delete, send, pay) — and, mid-task, at: significant architecture changes, deleting or overwriting data, risky database changes, using a paid or cost-incurring service, and disruptive changes to a running system. One decision per approval, with evidence attached; approvals are never batched together.
 7. **Right roles, enough roles.** No running every role for a small task; never skip a role that the risk requires (especially Security and QA).
 8. **Big decisions are written down** (ADR for architecture, Clarifications inside the spec for requirements) — decisions must not live only in chat and drift away.
 9. **Respect the project's existing systems** (design system, architecture, code conventions) over the agent's preferences.
 10. **Admit and fix mistakes openly.** An error found in an earlier gate goes back to that gate for repair — never patched over downstream.
-11. **All test cases pass, or the line stops.** Every gate defines its test cases up front. The next gate may start only when 100% of the current gate's test cases PASS. A single FAIL stops the workflow at that gate: no proceeding, no silent workaround, no "fix it later".
+11. **All test cases pass, or the line stops.** Every gate defines its test cases up front. The next gate may start only when 100% of the current gate's test cases PASS. A single FAIL stops the workflow at that gate: no proceeding, no silent workaround, no "fix it later". A fix is verified by re-running the failed case **and** the full gate suite — only a clean 100% PASS reopens the gate.
 12. **Every failure is reported, immediately and in writing.** A failure produces a Failure Report (what failed, the evidence, the suspected cause, the owning role, what is needed to fix it, what the user must decide) before any further work. Hiding, softening, or quietly retrying past a failure is a process violation.
 13. **The user's input is processed exhaustively.** Long or detailed instructions are decomposed item by item (Requirement Inventory + coverage check): every clause of the user's input maps to a requirement, a question, or an explicit out-of-scope note. Nothing is dropped silently, and nothing is "summarized away".
+14. **Completion claims name their level.** Completion is a ladder — **WRITTEN → SYNTAX-CHECKED → RUN → TESTED → DEPLOYED → USER-ACCEPTED** — and any claim that work is "done" must state which level it has reached, with the evidence for that level. A lower level is never reported as a higher one.
 
 
 ---
@@ -163,22 +177,34 @@ Raw task → GATE 0 Orchestrator (clarify → spec → routing)
   → GATE 5 Developer + Code Review → GATE 6 Integration → GATE 7 QA → GATE 8 Release
 ```
 Roles skipped by Routing are jumped over, preserving the relative order of the rest. Allowed in parallel:
-Architect FE ∥ Architect BE (contract agreed at the end) · Dev FE ∥ Dev BE (after the contract) · QA writes test cases from Gate 1 onward.
+Architect FE ∥ Architect BE (contract agreed at the end) · Dev FE ∥ Dev BE (after the contract) · QA writes test cases from Gate 1 onward · Security early input (when routing Q6 = Yes): Security issues known security requirements to the Architect before Gate 4.
 
 ## Gate law (applies to every gate)
 - Each gate produces **one artifact** and self-checks against the checklist in that role's SKILL.md.
 - The user rules on each gate with exactly three verdicts: **PASS** (proceed) · **REWORK** (back to the same role) · **STOP** (abandon this direction).
 - **Maker ≠ Checker:** the next role (or Code Review / QA) is the independent check on the previous one.
+- **STATUS.md verdicts are recorded only by the Orchestrator.** Other roles submit status content (progress, evidence, open risks) for their gate; they never mark a gate PASS themselves — PASS is the user's verdict, and the Orchestrator records it.
+- **STOP closes the task.** On a STOP verdict, the Orchestrator closes STATUS.md with the final state and the reason, archives the task folder as-is, and records the abandonment. The process ends there; picking the work up again later means a new Gate 0 that references the archived folder.
 - An error discovered in an old gate while working in a newer one → go back to the old gate and fix the original artifact; never patch over it downstream.
 
 ## Test-Case Gate law (the hard stop — applies at EVERY gate)
 Every gate works test-first at the process level:
 1. **Define the test cases before doing the work.** Each role derives its gate's test cases from its SKILL.md gate checklist plus the spec's success criteria and acceptance criteria, and writes them into its artifact *before* executing (for QA these are the functional test cases; for design/architecture gates they are verifiable acceptance checks — e.g. "all 5 states present", "every endpoint in the contract has an error format").
-2. **Run every test case and record the result with evidence.** Result values are only `PASS` or `FAIL`, each with its evidence (log, screenshot, file:line, measured value). "Probably fine" is not a result.
+2. **Run every test case and record the result with evidence.** Result values are `PASS`, `FAIL`, or `BLOCKED` — `BLOCKED` means the case could not be executed (missing environment, data, access, or an upstream dependency), each with its evidence (log, screenshot, file:line, measured value). "Probably fine" is not a result. A gate with any BLOCKED case is **not PASS**: the gate report must list every blocked case with its reason, and the blockage must be cleared — or explicitly accepted by the user in writing, recorded in STATUS.md — before the gate can pass.
 3. **100% PASS is the only way forward.** The next gate starts only when every test case of the current gate is PASS.
 4. **One FAIL = full stop.** The workflow halts at that gate. The responsible role immediately writes a **Failure Report** (template: `templates/FAILURE-REPORT.template.md`) stating: which test case failed, the expected vs. actual result, the evidence, the suspected cause, the owning role of the root cause, the proposed fix, and what (if anything) the user must decide. The report is surfaced to the user before anything else continues.
 5. **Fix → re-run the failed case AND the full gate suite.** A fix is verified by re-running the whole gate's test cases (not only the one that failed), because fixes regress neighbors. Only a clean 100% PASS reopens the gate.
 6. **Never** skip a failing case, mark it "known issue" to proceed, weaken a test case to make it pass, or continue to the next gate "in parallel while fixing" — unless the user explicitly overrides in writing, and that override is recorded in STATUS.md with the risk accepted.
+
+## Pre-Implementation Consistency Audit (after Gate 4, before Gate 5)
+
+Before any code is written, the complete planning set gets one cross-check as a set — per-gate checks only ever see one artifact at a time. (Modeled on Spec Kit's `analyze` step and BMAD's implementation-readiness gate.)
+
+- **Scope:** spec × BA document × architecture × API contract × design × security requirements — the full set, read together.
+- **What it looks for:** conflicts between artifacts (the contract contradicts the BA rules; the design needs a state the spec never defines), gaps (a requirement no artifact picks up), and orphan requirements (specified, but owned by no downstream artifact).
+- **Read-only:** the audit **never edits artifacts**. Every finding goes back to the gate that owns it, is fixed there, and the audit re-runs.
+- **Blocking verdict:** Gate 5 does not start until the audit comes back clean (no unresolved conflicts, gaps, or orphans).
+- **Ownership:** the Orchestrator runs or schedules the audit (see the orchestrator skill, Step 8.4) and records its verdict in STATUS.md.
 
 ## The user's gate-review checklist (5 questions, ~5 minutes)
 1. Does the artifact file exist and open?
@@ -190,6 +216,16 @@ Every gate works test-first at the process level:
 ## Fast lane (small, low-risk work)
 Fixing text/data/typos, display-only config changes: shortened Orchestrator (≤2 questions) → Developer → QA verifies against the source.
 Conditions: no behavior change, no layout change, no touching auth/data/money. Outside those conditions → full flow.
+
+## Correct-course (requirements change mid-task)
+Requirements changing mid-flight is normal; absorbing them silently is not.
+1. **Record the change** in the spec (new version) and in STATUS.md — what changed, who requested it, when.
+2. **Assess the blast radius:** which already-completed gates does the change touch (a changed business rule touches BA; a changed flow touches UI/UX; a changed data shape touches the Architect)?
+3. **Re-run ONLY the affected gates** — each re-checks its artifact against the changed spec and re-runs its gate test cases. Unaffected gates keep their PASS.
+4. The change is never "just handled" inside the current gate: if it alters scope, behavior, or routing, the Orchestrator re-presents the affected part for the user's approval, exactly as in the rework loop.
+
+## Retrospective (after Gate 8)
+Once a task is released (or closed), the Orchestrator appends a short lessons record to the task folder: what went well, what failed or surprised, which assumptions proved wrong, and what the company should do differently next time. Lessons that are durable (project facts, conventions, recurring pitfalls) are **proposed** as updates to `constitution/PROJECT-PROFILE.md` — the user approves them before they are written (see AGENTS.md).
 
 
 ---
@@ -219,7 +255,7 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 2. **Receivers check, senders prove.** Each SKILL.md states the acceptance criteria its receiver will apply; the sender completes their handoff checklist against those same criteria before passing.
 3. **Rework returns to the owner.** A defect goes back to the role that owns that decision (business rule → BA, contract → Architect, visual → UI/UX, code → Developer), never fixed silently by the finder.
 4. **The spec is the spine.** Every artifact references the spec (requirement IDs, acceptance criteria IDs) so any output can be traced back to what the user actually asked for.
-5. **STATUS.md is the board.** The Orchestrator keeps `STATUS.md` current: which gate is active, what is waiting on whom, which risks are open.
+5. **STATUS.md is the board — and only the Orchestrator records verdicts in it.** The Orchestrator keeps `STATUS.md` current: which gate is active, what is waiting on whom, which risks are open. Other roles *submit* their status content (progress, evidence, risks) to the Orchestrator; they never mark their own gate PASS — PASS is the user's verdict, and the Orchestrator records it. On a STOP verdict, the Orchestrator closes STATUS.md with the final state and the reason, and archives the task folder as-is (see `workflow/MASTER-WORKFLOW.md`).
 
 
 ---
@@ -227,6 +263,8 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 # ===== ROUTING MATRIX — workflow/ROUTING-MATRIX.md =====
 
 # ROUTING MATRIX — Route to the right roles, and enough of them
+
+**Precedence rule:** when Tool A (the questions) and Tool B (the task types) disagree, the **stricter requirement wins** — a role marked mandatory by either tool is mandatory.
 
 ## Tool A — The 12-question decision tree (the Orchestrator answers these for every task)
 | # | Question | If YES → activate |
@@ -243,6 +281,8 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 | 10 | Is it a bug fix? | Bugfix branch: QA reproduces first → Developer fixes → QA regression |
 | 11 | Content/text/data only, no behavior or layout change? | Fast lane + QA still verifies against the official source |
 | 12 | Open creative work (video, 3D, motion, brand)? | UI/UX research first + a prototype approved before production |
+
+**Trigger — AI features:** does the product include AI features that interact with users or generate content? → Security (Gate 4) must apply the AI/LLM checklist, and the spec must include AI disclosure items: users are told they are interacting with AI, and AI-generated content is marked as such. Classify the feature during intake (see the AI rows of the NFR catalog in `skills/orchestrator-intake/references/elicitation-deep-dive.md`): does it consume a third-party model or provide/host one, and is the use case high-risk (e.g. hiring, credit, education)?
 
 ## Tool B — Routing by task type
 ✅ mandatory · ◐ conditional · — skipped (state the reason in the Routing Decision)
@@ -261,6 +301,8 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 | Infrastructure/deploy | — | ◐ | — | ◐ env/secrets | — | ◐ | ◐ smoke | ✅ leads |
 | Documentation/report | ◐ | — | — | — | — | — | ◐ check figures | — |
 
+> **Substitution rule (no deadlocks):** when routing skips a role, downstream input tables treat the missing artifact as substituted — the Gate 0 spec stands in for the BA document (see the Orchestrator's condensed-BA rule in `skills/orchestrator-intake/SKILL.md`, Step 7.6), and the release plan stands in for a full QA report on smoke-only routes. The substitution is recorded in STATUS.md. A skipped role's artifact must never deadlock a routed task.
+
 
 ---
 
@@ -270,7 +312,7 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 name: business-analyst
 description: Turn an approved Gate 0 spec into precise, testable business requirements. Use for requirements analysis, product briefs, PRDs, user stories, acceptance criteria, business rules, state models, permission matrices, and prioritization — whenever business logic is ambiguous, multi-actor, stateful, or involves money, quotas, approvals, or workflows. Follows BABOK v3, ISO 29148, INVEST, MoSCoW, and Given/When/Then (BDD/Gherkin). Produces 01-ba.md that QA can test line-by-line. Never chooses technology, architecture, UI layout, or database design. Keywords: BA, requirements, user story, acceptance criteria, PRD, business rules, use case, state machine, MoSCoW.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Business Analyst — Gate 1
@@ -789,6 +831,26 @@ Rule: the total effort of Must items should be ≤ ~60% of the round's capacity;
 4. Check that every core noun appears in the Glossary.
 5. Check that every state mentioned in an AC exists in the state model (and vice versa).
 
+## 7. Acceptance Criteria for Probabilistic (AI) Features
+
+When a feature's output is generated by a model (chat, generation, summarization, recommendation, classification), **binary acceptance criteria do not apply**: the same input class legitimately produces varying outputs, so "Given X, Then exactly Y" is unfalsifiable. Use rate-based criteria instead.
+
+**The golden set — owned by the BA:**
+- A fixed, versioned set of representative real inputs for the feature: typical cases, boundary cases, hostile/ambiguous cases, and cases drawn from real user failures once the feature is live.
+- The BA owns the set's contents and coverage; QA executes against it; nobody edits it mid-evaluation to make results look better (changes are versioned and re-run in full).
+
+**Rate-based criteria — every AI feature's AC must state:**
+- **Acceptable-output rate:** "≥ X% of golden-set outputs are graded acceptable" — X is set per feature from the cost of a wrong output, not copied from another feature.
+- **ZERO critical failures:** define the critical classes explicitly for this feature (e.g. fabricated facts presented as sourced, disallowed content, leaking another user's data, an irreversible action taken without confirmation). A single critical failure fails the evaluation regardless of the overall rate.
+- **A human grading rubric for "acceptable":** 3–5 concrete dimensions (correct, complete, on-format, safe, tone-appropriate — pick what applies) with a pass bar per dimension, so two graders reach the same verdict. Borderline examples are recorded in the rubric as calibration anchors.
+
+**Re-eval triggers — the feature returns through this check when any of these change:**
+- The model (provider, version, or configuration)
+- The prompts / system instructions
+- The retrieval corpus or connected data sources
+
+A re-eval that misses the threshold is a failed gate, handled like any other: Failure Report, fix, full re-run of the golden set — never a threshold quietly lowered to pass.
+
 
 ---
 
@@ -798,7 +860,7 @@ Rule: the total effort of Must items should be ≤ ~60% of the round's capacity;
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)
@@ -822,6 +884,10 @@ Non-negotiable principles:
 6. **Never fix code yourself during review** (except an obvious one-line fix with the author's agreement,
    recorded). A reviewer who fixes and then approves their own fix destroys independence.
 7. **Escalate security suspicions to Security** — never conclude "probably nothing" yourself.
+8. **Two stages, in fixed order.** Stage 1 — *spec compliance*: does the code do what the spec, AC, and
+   contract say? Stage 2 — *code quality*: security, complexity, tests, naming, style. Stage 2 is
+   concluded only after Stage 1 passes; a Stage-1 failure returns the work without a Stage-2 pass —
+   elegant code that does the wrong approved thing is still the wrong thing.
 
 ## 2. When to Use / When NOT to Use
 
@@ -854,21 +920,28 @@ Non-negotiable principles:
 
 ## 4. What To Do — Step-by-Step Workflow
 
-### Step 1 — Understand the change before reading code
+The workflow runs as **two stages in fixed order**. **Stage 1 — spec-compliance review**
+(Steps 1–3): does the code do what the spec/AC and the contract say? Judge from the actual
+code — the dev notes are a claim to be verified, never evidence of compliance. **Stage 2 —
+code-quality review** (Steps 4–5): the security sweep, complexity, tests, naming, and style.
+If Stage 1 fails, the verdict is REQUEST CHANGES on compliance grounds and there is no
+Stage-2 pass; return the work. Only a change that passes Stage 1 earns a Stage-2 conclusion.
+
+### Step 1 — Understand the change before reading code (Stage 1)
 1.1. Read the dev notes + spec/AC + contract: what does this change *claim* to do, and in what scope?
 1.2. Look at the diff overview: the file list, the size, whether any file lies outside the claimed scope.
 A strange/out-of-scope file is the first finding to raise — even if the code in it is "good".
 1.3. Identify the sensitive areas in the diff (auth, permissions, money, data, migrations, configuration)
 for a deep sweep in Step 4.
 
-### Step 2 — Independently verify Dev's evidence
+### Step 2 — Independently verify Dev's evidence (Stage 1)
 2.1. Re-run (or reliably reconcile) the main commands: build, related tests. Results that differ from the
 dev notes → a finding.
 2.2. Read Dev's tests as code: do the tests actually check the behavior the AC describes, or only check
 "does not crash"? Do edge/error tests exist?
 2.3. Record in the review what you re-ran yourself — a reviewer who ran nothing must say so.
 
-### Step 3 — Review Design & Functionality
+### Step 3 — Review Design & Functionality (Stage 1)
 3.1. **Design:** is the change placed in the right layer/module? Does it break architecture boundaries,
 create dependency cycles, or duplicate logic that already exists elsewhere? Does it match the contract
 (fields, errors, auth) point by point?
@@ -878,14 +951,14 @@ and concurrent paths (two operations at once) corrupting data.
 3.3. For FE: cross-check the design — all states present, terminology matching, no self-invented
 components outside the DS.
 
-### Step 4 — Sweep security in the diff
+### Step 4 — Sweep security in the diff (Stage 2)
 Walk the sensitive-pattern list in `references/playbook.md`; at minimum: input not validated on the
 server · missing permission/ownership checks · string concatenation into queries · secrets in
 code/config · sensitive data in logs · excessive data returned · TLS/certificate verification disabled ·
 file paths taken straight from input. Any pattern found → at least a [SHOULD FIX] finding; if it touches
 real data/money/permissions → [BLOCKER] + call Security to confirm if you are unsure of the severity.
 
-### Step 5 — Review Complexity, Tests, Naming/Comments/Style
+### Step 5 — Review Complexity, Tests, Naming/Comments/Style (Stage 2)
 5.1. **Complexity:** where could it be simpler with identical behavior? Abstractions built for needs that
 do not exist yet (YAGNI)? Newly added functions that are too long / carry too many responsibilities?
 5.2. **Tests:** does new behavior have tests; would the tests actually fail if the code were wrong (or are
@@ -963,7 +1036,7 @@ with the words "fixed".
 
 - **The review document** — always its own file, `05-code-review.md`, where the verdict and
   findings live — containing:
-  1. The scope reviewed: the diff/branch, the artifacts checked against, the commands you re-ran + results.
+  1. The scope reviewed: the diff/branch, the artifacts checked against, the commands you re-ran + results; the Stage 1 (spec-compliance) result and — only if Stage 1 passed — the Stage 2 (code-quality) result.
   2. Findings in review order, each: severity label + file:line + the problem + the consequence + a fix suggestion.
   3. What could not be checked (and why) — recorded honestly.
   4. The verdict: **APPROVE** or **REQUEST CHANGES** + the list of [BLOCKER]s that must be handled.
@@ -984,6 +1057,7 @@ Diff: an endpoint that updates a record by ID.
 ## 9. Gate Checklist
 
 - [ ] The reviewer is not the author of the change (or the limitation is explicitly declared)
+- [ ] Stage 1 (spec compliance) was concluded before Stage 2; a Stage-1 failure was returned without a Stage-2 pass
 - [ ] The change claim + spec/AC + related contract/design/SEC-REQs were read before reading code
 - [ ] The main build/tests were re-run personally; results recorded in the review
 - [ ] Design: correct layer/module, matches the contract, no duplicated logic, no out-of-scope files
@@ -1362,7 +1436,7 @@ Two closing rules:
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Developer (FE / BE) — Gate 5
@@ -1396,6 +1470,7 @@ Non-negotiable principles:
 - Implementing a feature against approved stories/AC (FE, BE, or both).
 - Building screens/components against an approved design, wiring APIs against the contract.
 - Writing endpoints, services, data queries, and migrations against the locked architecture.
+- Setting up a brand-new project's skeleton (Step 0) when routing identifies a greenfield task.
 - Fixing a bug that has reproduction information (from QA/a user).
 - Writing tests for new behavior or behavior being fixed.
 
@@ -1412,13 +1487,38 @@ Non-negotiable principles:
 | Input | Received from | If missing |
 |---|---|---|
 | Approved spec + Routing (Dev in scope, order clear) | Gate 0 — `00-spec-and-routing.md` | Stop; send back to the Orchestrator |
-| User stories + AC (to know what "correct" means and to write tests) | Gate 1 — `01-ba.md` | Stop; send back to the BA |
-| Architecture + API contract (endpoints, fields, errors, auth) | Gate 2 — `02-arch-*.md`, `02-api-contract.md` | Stop; send back to the Architect |
+| User stories + AC (to know what "correct" means and to write tests) | Gate 1 — `01-ba.md` | If routing required Gate 1 → Stop; send back to the BA. If routing skipped Gate 1 → the Gate 0 spec (incl. its [CONDENSED BA] section) stands in — see the substitution rule below |
+| Architecture + API contract (endpoints, fields, errors, auth) | Gate 2 — `02-arch-*.md`, `02-api-contract.md` | If routing required Gate 2 → Stop; send back to the Architect. If routing skipped Gate 2 → the Gate 0 spec stands in — see the substitution rule below |
 | Design + 5-state notes (for the FE part) | Gate 3 — `03-design.md` | Stop; send back to UI/UX |
 | Mandatory security requirements, SEC-REQ (if any) | Gate 4 — `04-security.md` | If the task touches auth/data/money and there is none → ask the Orchestrator/Security before coding |
-| The existing codebase + its conventions | Project repo + PROJECT-PROFILE | Read the repo first; never assume the structure |
+| The existing codebase + its conventions | Project repo + PROJECT-PROFILE | Read the repo first; never assume the structure (no repo yet → greenfield: Step 0) |
+
+**Substitution rule (routing skipped a gate):** when the Gate 0 Routing Decision explicitly
+skips Gate 1 and/or Gate 2 for this task, the approved Gate 0 spec — including any
+`[CONDENSED BA]` section it carries — stands in for `01-ba.md` and/or the architecture
+files. Record the substitution in `STATUS.md` (which artifact was substituted, and by
+what) before coding. "Stop; send back" applies only when routing *required* the artifact
+and it is missing or fails acceptance. If the spec lacks the detail needed to implement
+safely, that is a Gate 0 defect: send it back to the Orchestrator — never invent the
+missing detail.
 
 ## 4. What To Do — Step-by-Step Workflow
+
+### Step 0 — Greenfield setup (only when routing identifies a brand-new project)
+When the Routing Decision marks the task as a new project (no existing codebase), build
+the skeleton first — no feature work begins until the skeleton runs:
+0.1. `git init`; add the remote and push only with the user's explicit approval.
+0.2. Create the folder structure separating the app and its modules by feature (see
+`references/engineering-craft.md` §1), so boundaries and ownership are visible from day one.
+0.3. Write the `README`: what the project is and how to run it.
+0.4. Write `.gitignore` covering secrets, build output, and dependency folders.
+0.5. Write `.env.example` listing every environment variable the app requires — name +
+one-line purpose each, with NO real values.
+0.6. State the naming conventions once (files, modules, variables) in the README or a
+contributing note, and follow them from the first file.
+0.7. Configure the linter and the formatter for the stack; both must pass on the skeleton.
+0.8. Prove the skeleton runs: the empty app builds/starts and the test command passes.
+Record the commands and output in the dev notes — this is the project's first baseline.
 
 ### Step 1 — Read and plan the slices
 1.1. Read all inputs in section 3. Record the list of AC that must be satisfied and the SEC-REQs that must be obeyed.
@@ -1427,15 +1527,30 @@ Non-negotiable principles:
 end-to-end) first, edge/error slices after. Write the slice plan at the top of `05-dev-notes.md`.
 1.4. Any contradiction or gap in the artifacts → stop right here (the cheapest point), and ask the owning
 team. Never carry a contradiction into the code and let QA find it.
+1.5. **Decompose into work units.** Before coding, break the approved work into
+dependency-ordered **work units**: each unit names the exact files it touches, produces
+exactly one verifiable outcome, and carries its own check (the test or command that
+proves it). Order units so each builds only on the units before it. Record the unit
+list in `STATUS.md` as an enumerable list (unit → status) and execute strictly in
+order — a unit is done only when its own check passes. The slices of 1.3 are the plan's
+shape; the work units are its executable steps.
 
 ### Step 2 — Set up the verification frame first
-2.1. Confirm the project runs on the current machine: the original build/run/test commands are green
-*before* you change anything. If the baseline is already red → record it and report it clearly, so the
-old failures are not mixed with yours.
+2.1. **BASELINE check (before the first work unit):** confirm the pre-existing state
+builds and its tests pass — run the project's build and test commands on the untouched
+code and record the result in the dev notes. If the baseline is already red → record
+exactly which failures pre-exist and report it clearly. Later failures are judged
+against this record: a failure present in the baseline is not yours; a failure absent
+from the baseline is.
 2.2. Decide the verification commands you will use throughout the task (test runner, lint, build) and
 record them in the dev notes.
 
 ### Step 3 — Build each slice with TDD (for important logic)
+**TDD is the law inside every work unit:** the test comes first (RED), then the minimal
+code that passes (GREEN), then REFACTOR. Code written before its test exists is not kept
+and retro-fitted with a test afterwards — it is rewritten from the test. Waivers (e.g.
+pure presentation with no logic) follow the playbook and are recorded in the dev notes,
+never silent.
 For each slice:
 3.1. **RED:** write a test for the slice's behavior per the AC; run it; confirm it *fails for the right
 reason* (the behavior does not exist yet), not because of a syntax/environment error.
@@ -1472,7 +1587,8 @@ into the dev notes.
 out-of-scope changes.
 
 ### Step 7 — Submit to Code Review
-Complete the dev notes, update `STATUS.md`, and state the re-run commands so the reviewer can verify
+Complete the dev notes, update `STATUS.md` (every work unit marked done, with its check
+result), and state the re-run commands so the reviewer can verify
 independently. Never declare "gate passed" yourself — that is the conclusion of Code Review and the later gates.
 
 ## 5. What To Use
@@ -1554,6 +1670,7 @@ Story: "The user filters the invoice list by month."
 
 - [ ] All inputs read; every contradiction resolved in writing before coding
 - [ ] The baseline (build/tests before changes) was checked and its state recorded
+- [ ] Work was decomposed into dependency-ordered work units, executed in order, each with its own passing check; the unit list in `STATUS.md` is complete
 - [ ] Every slice is complete: behavior + test + evidence
 - [ ] Important logic has TDD-written tests; every bug fix has a reproducing test
 - [ ] FE: correct DS/components/tokens, all 5 states, errors handled per contract code
@@ -1749,6 +1866,8 @@ Worked micro-example:
 
 Anti-patterns: changing several things and re-testing ("shotgun debugging"), fixing where the error *appears* instead of where it *originates*, and declaring victory after one manual pass without a regression test.
 
+**Minimal-change rule for bug fixes:** fix with the smallest reasonable diff. Never rewrite a working part as a side effect of a fix — a fix that also restructures invites new defects and makes the change unreviewable. If the right fix is structural (the root cause is the design, not a line), stop: record it and route it as its own change — a refactor or architecture task with its own tests and review — instead of smuggling it into the bug fix.
+
 ## 7. Performance Hygiene
 
 - **Measure before optimizing.** Profile/timing first; the bottleneck is rarely where intuition says. An optimization without a before/after measurement is a guess wearing a costume.
@@ -1921,7 +2040,7 @@ right, not a failure.
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Integration Engineer — Gate 6
@@ -1981,12 +2100,15 @@ Immutable principles:
 | `01-ba.md` (main business flows) | Gate 1 — BA | Selecting the E2E backbone flows |
 | `04-security.md` (API-related auth/authorization parts) | Gate 4 — Security | Checking tokens, permissions, and 401/403 behavior against the contract |
 | `05-dev-notes.md` from FE and BE | Gate 5 — Dev | Knowing which endpoints are done, environment variables, how to run the real build |
+| `05-code-review.md` with verdict APPROVE | Gate 5 — Code Review | Integration starts only on an APPROVE verdict; REQUEST CHANGES or a missing review = stop and send the work back to Gate 5 |
 | `constitution/PROJECT-PROFILE.md` | Project | Target environment, region, hosting, operational constraints |
 
 **If an input is missing:** if `02-api-contract.md` is missing, **stop** and report to
-Gate 0/the Architect to supply it. Never infer a contract from code. For any other
-missing input, state in the report which input was absent, which checks could not be
-performed because of it, and downgrade the gate conclusion accordingly (see Step 7).
+Gate 0/the Architect to supply it. Never infer a contract from code. If
+`05-code-review.md` is missing or its verdict is not APPROVE, **stop** and send the work
+back to Gate 5. For any other missing input, state in the report which input was absent
+and which checks could not be performed because of it — a check that could not be
+performed cannot pass, so the gate conclusion is FAIL (see Step 7).
 
 ## 4. What To Do — Step-by-Step Workflow
 
@@ -2084,7 +2206,14 @@ For **each** endpoint in the contract, check in order:
 7.1. Summarize: endpoints verified / total; deviations by severity; mocks still
      open; E2E flows passed / total.
 7.2. Conclude PASS only when every condition in the Gate Checklist (Section 9) holds.
-7.3. If REWORK: state clearly what goes back to each team, item by item, and the
+7.3. The conclusion is binary — **PASS or FAIL** (Test-Case Gate law). There is no
+     conditional PASS: unresolved blocking deviations, a discovered undeclared mock,
+     or unverified backbone scope mean FAIL, with a Failure Report naming the owning
+     role. The single exception is the user's own decision: if the user records a
+     written override in `STATUS.md` accepting a named deviation or an unverified
+     part, the gate may conclude PASS under that override. Integration may never
+     downgrade, soften, or condition a conclusion on its own authority.
+7.4. If FAIL: state clearly what goes back to each team, item by item, and the
      conditions for re-verification.
 
 ### Decision points & hard situations
@@ -2098,9 +2227,10 @@ For **each** endpoint in the contract, check in order:
   open risk and propose a retry/queue mechanism for the Architect to decide — do
   not fake a PASS based on one lucky run.
 - **Only part of the scope can be verified due to missing test accounts/data:**
-  verify what can be verified, record the unverified part in the report, and
-  downgrade the conclusion to "conditional PASS" with specific conditions — or
-  REWORK if the unverified part lies on a backbone flow.
+  verify what can be verified and record the unverified part in the report. The
+  conclusion is FAIL, with a Failure Report — unverified scope is not passed scope —
+  unless the user records a written override in `STATUS.md` accepting the unverified
+  part (see Step 7.3).
 - **A mock that must deliberately stay (the feature is not at the build-it-real
   stage yet):** acceptable if it is declared, has an owner and a deadline, and the
   gate approver confirms they know about it.
@@ -2118,8 +2248,8 @@ For **each** endpoint in the contract, check in order:
   third-party faults.
 
 **This repo's files:**
-- `templates/API-CONTRACT.template.md` — the contract format; its Deviation Log
-  section is where deviations are recorded.
+- `templates/API-CONTRACT.template.md` — the contract format. Deviations are recorded
+  in the Deviation Log section of the task's own `02-api-contract.md` (see Section 7).
 - `references/playbook.md` (this skill's playbook) — contract matrix method, mock
   hunting techniques, backbone-flow selection, environment pitfalls, deviation
   procedure.
@@ -2174,9 +2304,14 @@ escalate it as a contract question to the Architect instead of deciding it yours
   2. Mock Inventory — the list of everything still fake/stubbed.
   3. E2E results for each backbone flow, with evidence.
   4. Environment check results.
-  5. Contract Deviation Log — filled in directly in the Deviation Log section of
-     `templates/API-CONTRACT.template.md` (and summarized in `06-integration.md`).
-  6. Gate conclusion: PASS / REWORK + the list of items returned to each team.
+  5. Contract Deviation Log — appended directly in the Deviation Log section of the
+     task's `02-api-contract.md` (the contract file produced at Gate 2), and
+     summarized in `06-integration.md`. Appending deviations there is the one
+     sanctioned exception to "never edit another role's artifact": append-only, and
+     only in the Deviation Log section — the contract's terms themselves are never
+     edited by Integration (a wrong contract goes back to the Architect, Step 5.4).
+  6. Gate conclusion: PASS / FAIL + (on FAIL) the Failure Report and the list of
+     items returned to each team.
 
 ## 8. Worked Example
 
@@ -2237,9 +2372,8 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 11. Handoff to the Next Role
 
 ### (a) Who receives your work
-- **QA (Gate 7)** — when the gate conclusion is PASS (or a clearly documented
-  conditional PASS).
-- **The owning Dev teams / the Architect** — when the conclusion is REWORK: the
+- **QA (Gate 7)** — when the gate conclusion is PASS.
+- **The owning Dev teams / the Architect** — when the conclusion is FAIL: the
   work goes back, not forward.
 
 ### (b) The exact artifacts and required contents
@@ -2254,7 +2388,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ### (c) Handoff checklist you complete before passing
 - [ ] Every endpoint in scope appears in the matrix with a PASS/FAIL result and evidence
 - [ ] The Mock Inventory is complete and each mock has an owner and a deadline
-- [ ] The Deviation Log is up to date; every blocking deviation is either closed with re-verification evidence or the conclusion is REWORK
+- [ ] The Deviation Log is up to date; every blocking deviation is either closed with re-verification evidence or the conclusion is FAIL
 - [ ] The report names the exact environment, build, and test data the results apply to
 - [ ] Unverified items are listed, not omitted
 - [ ] The notes for QA (mocks, previously-deviating points) are written in the report
@@ -2573,7 +2707,7 @@ Run before go-live; every "unknown" is a launch blocker for money/auth paths.
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -2684,11 +2818,13 @@ Users often send long, dense instructions. A long input is NOT a summary task �
 7.3. For each team, the Routing Decision must state: Mandatory / Conditional (what the condition is, who confirms it) / Skipped (the reason) + the running order + which teams may run in parallel + each team's input→output.
 7.4. **Fast lane:** only when the task changes no behavior, changes no layout, and touches no auth/money/personal data → shortened route: Dev → QA cross-check. Record "LANE: FAST" and which conditions allow this lane.
 7.5. Default order: BA → Architect → UI/UX → Security → Dev → Integration → QA → Release. Any change to this order needs a recorded reason in the Routing Decision.
+7.6. **Condensed BA (when routing skips the BA):** the Orchestrator condenses the BA essentials — the actors, the top user stories, and acceptance criteria for the main flow — into the spec itself, in a clearly marked `[CONDENSED BA]` block. Downstream roles treat that block as the BA input (see the substitution rule in `workflow/ROUTING-MATRIX.md`); a missing `01-ba.md` must never deadlock a task whose routing skipped the BA.
 
 ### Step 8 — Present Gate 0 for approval and open STATUS
 8.1. Create `STATUS.md` from the template, with Gate 0 in "awaiting approval" state.
 8.2. Present to the user in one go: playback + spec + routing, with the `[ASSUMPTION]`/`[TBC]` list highlighted so they approve it consciously.
 8.3. Only when the user approves: mark Gate 0 PASS in STATUS and hand off to the first team per Section 11. **Before that moment, no team may start.**
+8.4. **Coordination continues after Gate 0.** The Orchestrator stays the coordinator for the whole task: it records every gate verdict in STATUS.md (roles submit their status content; only the Orchestrator marks a gate PASS, and only on the user's verdict), and it runs or schedules the **Pre-Implementation Consistency Audit** after Gate 4 — the read-only cross-check of the complete planning set that must come back clean before Gate 5 starts (see `workflow/MASTER-WORKFLOW.md`).
 
 ### Handling hard cases
 
@@ -2921,6 +3057,8 @@ Users almost never volunteer NFRs; unasked, they become late-stage surprises. As
 | Concurrency | "What happens when two people do this at the same time?" | rule: block, queue, last-wins, or merge |
 | Availability | "If this is down for an hour, what breaks? When is downtime acceptable?" | criticality tier + maintenance window |
 | Security posture | "Who must NOT be able to see or do this? Is any of it personal, financial, or health data?" | named exclusions + data class |
+| AI features | "Does the product include AI features that interact with users or generate content? Which parts are AI-generated?" | named AI surfaces + disclosure items for the spec (users are told they interact with AI; generated content is marked as such) |
+| AI classification | "Does the feature consume a third-party model or provide/host one? Is the use case high-risk — hiring, credit, education, health, access to essential services?" | classification: consumer / provider · standard / high-risk (high-risk routes extra scrutiny at Gate 4) |
 | Devices & platforms | "Which devices/browsers/versions must it work on — including the oldest?" | explicit minimum (e.g. "Android 10+, Chrome last 2") |
 | Weak environments | "Will users be on slow networks or low-end devices? Must anything work offline?" | yes/no + which flows degrade how |
 | Accessibility | "Must it meet an accessibility standard? Which users with disabilities are expected?" | target (e.g. WCAG AA) or explicit non-goal |
@@ -3152,7 +3290,7 @@ A summary-style intake would likely keep S-01/S-02 and lose S-05 and S-07 — ex
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # QA / Tester — Gate 7
@@ -3819,6 +3957,27 @@ Release: "patients can cancel appointments" (fictional). Risk table (§1) scores
 
 Total planned: 23 scripted cases + 2 charters. That is what "enough testing" looks like when it is derived, not guessed.
 
+## 12. Testing AI features & AI-generated tests
+
+### (a) AI features: evals are the QA artifact
+
+Deterministic cases cannot verify a probabilistic feature. For any feature whose output is model-generated, QA's primary artifact is a **versioned eval set**, not a pass/fail case list:
+
+- **Source:** the golden set defined by the BA (see the BA playbook, "Acceptance criteria for probabilistic (AI) features") — representative real inputs, versioned, never edited mid-run.
+- **Scoring:** graded, not binary. Combine **code-based graders** (format checks, citation-existence checks — every cited source must actually resolve, keyword/constraint checks) with **human or model graders** applying the BA's acceptability rubric. Record the score distribution, not just an average.
+- **Launch gates:** the feature does not pass Gate 7 unless the eval meets the BA's stated thresholds: acceptable-output rate at or above target AND **zero critical failures**, with **hallucination rate** (claims with no supporting source) and **citation-existence rate** reported as named numbers in the test report.
+- **Regression:** the full eval re-runs on **every model, prompt, or retrieval-corpus change** — an eval result from a previous model version proves nothing about the current one. A threshold miss is a gate FAIL like any other.
+- **Production health signals** (agree them at the gate so Release can watch them): **correction rate** (users editing/fixing AI output), **regeneration rate**, **escalation-to-human rate**, and critical-failure reports. Explicitly **not** the thumbs-up rate: thumbs reward confident, agreeable answers — including confidently wrong ones — and a rising thumbs rate can hide a rising error rate.
+
+### (b) AI-generated tests and code: the discipline
+
+AI generation is now a normal source of both production code and test code. The rules that keep it safe:
+
+- **Generate tests from acceptance criteria and specs — never from the code under test.** A test generated from the implementation confirms the code agrees with itself; it cannot find the defect where the code misunderstood the requirement. (This extends the existing anti-pattern in the QA SKILL.md to generated tests.)
+- **Human review of generated tests is mandatory.** A generated test that always passes, asserts nothing meaningful, or quietly encodes the bug as the expected result is worse than no test — it manufactures confidence. Review generated tests like code: what behavior does this actually pin down?
+- **Self-healing tools have a hard boundary:** they may repair **locators and mechanics only** (a moved button, a renamed field). They may **never** change assertions, expected values, or test intent — a heal that weakens what the test verifies turns a failing product signal into a green lie. **Every heal is a reviewable diff**, approved by a human before it lands.
+- **Track the defect-escape rate of AI-generated changes** (defects found in production or at later gates, attributed to AI-generated code/tests) as a named figure in the test report. If AI-generated changes escape at a higher rate than human-written ones, the response is smaller batches and deeper review for generated changes — decided from the number, not from vibes.
+
 
 ---
 
@@ -3828,7 +3987,7 @@ Total planned: 23 scripted cases + 2 charters. That is what "enough testing" loo
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Release / DevOps — Gate 8
@@ -3894,7 +4053,15 @@ Immutable principles:
 
 **If an input is missing:** if `07-test-report.md` does not conclude PASS, or
 there is no explicit release order, **stop** — the prerequisites in Step 1 are not
-met and no urgency overrides them. If the previous release record is missing,
+met and no urgency overrides them. **One exception, set by routing, not by
+preference:** when the Routing Decision made QA smoke-only or skipped the full
+QA gate for this task (typical for infrastructure/deploy tasks, see
+`workflow/ROUTING-MATRIX.md`), the full `07-test-report.md` does not exist by
+design — in that case the release plan's own smoke test results (Steps 5 and 7)
+stand in for it, and the substitution is recorded explicitly in `08-release.md`
+("no full QA gate per routing; release smoke results used instead"). The
+stop-if-no-PASS rule applies in full whenever routing **did** require the full
+QA gate. If the previous release record is missing,
 establish the current production version and build identity by direct
 verification (Step 4.4) and record that this baseline was reconstructed, not read
 from a record.
@@ -3977,6 +4144,62 @@ from a record.
 8.3. A short lesson (retro): what almost went wrong, what to change in the
      checklist next time — record it in the release record for the next release
      to read.
+
+### Standing duty — vulnerability patch SLA (between releases)
+
+Patching known vulnerabilities is not release work that waits for the next
+feature train; it runs on its own clock, tiered by risk. **Owner: Release.
+Consulted: Security** (Gate 4 classifies severity and exploitability).
+
+| Tier | Condition | Deadline |
+|---|---|---|
+| Emergency | Vulnerability is **actively exploited** and the affected component is **internet-exposed** | **≤ 3 days**, including forensic triage (is the running system already compromised?) before or alongside patching |
+| Critical | Critical severity, not known to be exploited | **14 days** |
+| High | High severity | **30 days** |
+| Everything else | Medium/low, hardening, defense-in-depth | The next regular release cycle |
+
+Rules:
+- The clock starts when the vulnerability is known (scanner finding, advisory,
+  dependency alert) — not when someone gets around to triaging it.
+- A patch ships through the emergency/hotfix path (shortened, never skipped:
+  approval, minimal rollback plan, production smoke, record) when the tier's
+  deadline demands it.
+- **A missed SLA is reported to the user like a gate failure**: what is
+  unpatched, since when, the exposure, and the plan to close it. Silence about
+  an overdue patch is a process violation, not a scheduling choice.
+- If a patch cannot be applied (breaking upstream fix, no fix published),
+  record the compensating control (isolation, WAF rule, feature off) and the
+  re-check date in its place.
+
+### Mobile store releases — additional checklist
+
+When the release ships through an app store (Apple App Store / Google Play),
+the store is a second gatekeeper with its own deadlines. Run this checklist in
+addition to the steps above:
+
+- [ ] **SDK / target-API floors are current:** the build meets Apple's current
+      required Xcode/SDK version and Google Play's current target-API level.
+      ⚠️ **Standing rule: verify both against the store's own current deadline
+      page at release time.** These floors move roughly yearly and old blog
+      posts (and old versions of this skill) go stale — the store's page is
+      the only source that counts.
+- [ ] **Privacy labels match reality:** the App Privacy (Apple) and Data Safety
+      (Google) declarations are checked against the **actual** SDK/dependency
+      list in this build (use the release's SBOM/dependency inventory — see
+      `references/release-engineering.md` §4): every data-collecting SDK is
+      declared, nothing declared that the build does not do.
+- [ ] **Age-rating questionnaire is current** for both stores (an outdated
+      questionnaire can block updates outright).
+- [ ] **Closed-testing lead time is planned** for Google Play: new personal
+      developer accounts must complete closed testing (a set number of
+      testers over a set period) before production access — start it early;
+      it cannot be compressed at release time.
+- [ ] **Store AI / data-sharing disclosures are answered:** where the store
+      asks whether user data is shared with third-party AI services or used
+      to train models, the answers match the app's actual behavior and the
+      project's privacy declarations.
+- [ ] Review timelines are budgeted: store review is outside your control —
+      never promise a fixed public launch date that assumes instant approval.
 
 ### Decision points & hard situations
 - **Emergency release (hotfix) for an ongoing incident:** staging may be shortened
@@ -4201,8 +4424,174 @@ The gate approver will send the work back if:
   changelog format, the rollback plan template, how to design the smoke test
   set, post-release monitoring, basic incident response, and light DORA.
 - `references/release-engineering.md` — read when releases get serious: deployment strategies, feature-flag discipline, environment parity, CI/CD gating, observability minimums, backup/restore drills, incident runbook, release calendar.
+- `references/operations-maintenance.md` — read when the release is done and the system must stay healthy: dependency lifecycle automation, end-of-life tracking, the patch cadence, technical-debt management, the periodic ops rhythm, and feedback intake. This is the standing between-releases discipline, not per-release work.
 - `templates/RELEASE.template.md` — the release record template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision question 9).
+
+
+---
+
+# ===== SKILL REFERENCE — skills/release-devops/references/operations-maintenance.md =====
+
+# Operations & Maintenance — Deep Dive
+
+> Read this when the release is done. The release gate gets a change safely
+> into production; this file is the standing discipline that keeps the running
+> system healthy *between* releases — dependencies, end-of-life components,
+> patch cadence, technical debt, and the rhythm that makes all of it happen
+> without relying on anyone's memory.
+
+## 1. Dependency lifecycle automation
+
+Dependencies rot on their own schedule, not yours. The choice is between many
+small, boring updates and one terrifying one — automation is how you get the
+boring kind.
+
+- **Turn on an update bot** (Renovate or Dependabot) for every repository and
+  every ecosystem in it (app dependencies, CI actions, container base images).
+  Updates arrive as pull requests; nothing updates itself silently in the
+  main line.
+- **Group the PRs.** Patch/minor updates of one ecosystem arrive as one grouped
+  PR on a schedule (weekly is a sane default), not as 30 individual PRs nobody
+  can face. Major-version bumps stay individual — they deserve individual
+  reading.
+- **Release-age delay:** do not adopt a new dependency version the day it is
+  published. Configure a minimum release age (a few days is typical) before the
+  bot proposes it. This is supply-chain hygiene: a compromised release is
+  usually detected and yanked within days; the delay keeps you out of the
+  blast window at the cost of being slightly behind — a trade worth making
+  everywhere except security patches (see §3).
+- **Pin CI actions** to full commit SHAs (tags can be moved; SHAs cannot), and
+  let the update bot propose the bumps — pinned *and* current, not pinned and
+  fossilized.
+- **Weekly triage slot:** a fixed, short slot (30–60 minutes) where the
+  pending update PRs are reviewed and merged or explicitly deferred with a
+  reason. An update queue nobody triages is just a slower way to fall behind.
+- **Automerge, narrowly:** automerge is allowed only for **patch-level**
+  updates with a fully green CI (tests + the security scans from the pipeline)
+  and never for anything touching authentication, cryptography, payments, or
+  the build itself. Everything else gets human eyes. If a patch update ever
+  breaks production through automerge, automerge narrows further — that is
+  the feedback loop, not a reason to abandon the system.
+- **Reading an update PR** (the human part the bot cannot do): skim the
+  changelog/release notes for breaking-change language even in minor bumps,
+  check whether the update changes a transitive dependency you rely on
+  directly, and confirm the lockfile diff contains only what the PR claims.
+  Most supply-chain surprises are visible in the diff to anyone who looks;
+  the discipline is looking, briefly, every time — which is exactly what the
+  grouping and the weekly slot make affordable.
+
+## 2. End-of-life (EOL) tracking
+
+A runtime or framework past its end-of-life date receives no security patches.
+Every day on it is borrowed time, and the borrowing is silent — nothing breaks
+the day support ends.
+
+- **Keep an inventory** of the runtimes, frameworks, databases, and base
+  images the system runs on, each with its EOL date, checked against
+  **endoflife.date** (which also offers an API for automation).
+- **Alert ~6 months ahead** of each EOL date. Six months is the point where an
+  upgrade is still a planned project; at six weeks it is an emergency, and
+  after the date it is an unpatched exposure.
+- **Every EOL (or approaching-EOL) item has three things:** a named **owner**,
+  an **exit path** (upgrade to which supported version, migrate to what, or
+  retire the component), and a **date** by which the exit happens. An EOL item
+  with no exit path is recorded as an accepted risk with the gate approver's
+  name on it — never as an unowned surprise.
+- **CI fails on NEW EOL introductions:** adding a dependency or base image
+  that is already EOL (or EOL before the project's planning horizon) blocks
+  the change. Existing EOL is managed through the inventory; *new* EOL is
+  simply not admitted.
+
+## 3. Vulnerability patch cadence
+
+Known vulnerabilities are patched on the risk-tiered SLA defined in the
+release skill (`../SKILL.md`, "Standing duty — vulnerability patch SLA"):
+actively exploited + internet-exposed ≤ 3 days, critical 14 days, high 30
+days, everything else in the next regular cycle.
+
+- The maintenance loop's job is to make the SLA boring: the weekly triage (§1)
+  reviews scanner/advisory findings alongside update PRs, so most patches
+  land as routine updates long before their deadline.
+- The release-age delay (§1) does **not** apply to security patches — the SLA
+  clock outranks it.
+- A missed SLA is reported to the user like a gate failure (see the SKILL.md
+  rule). The quarterly audit (§5) reviews SLA compliance as a trend: repeated
+  misses in one tier mean the process, not the people, gets fixed.
+
+## 4. Technical-debt management
+
+Debt is not "code we dislike." It is work the system will force you to do
+later, at a worse time, with interest. Managed debt is a financing tool;
+unmanaged debt is a surprise.
+
+- **One debt register** for the whole project (a file or tracker section —
+  not scattered TODO comments). Every entry states: what the debt is, where
+  it lives, what it costs (slower changes, incident risk, blocked features),
+  and when it was taken on and why.
+- **Classify each entry by type:** code/design debt, test debt, dependency
+  debt (§1–§2), documentation debt, infrastructure debt. Classification is
+  what makes the register sortable instead of a guilt list.
+- **Estimate size simply:** a rough remediation cost in developer-days
+  (0.5 / 1 / 3 / 10 — coarse on purpose). Precision is not the point;
+  comparability is.
+- **Order by hotspots first:** priority ≈ **complexity × change frequency**.
+  Debt in code that is both tangled and touched every week charges interest
+  daily; identical debt in code untouched for a year charges almost none.
+  Pay down hotspots; let cold debt wait without guilt.
+- **Standing paydown allocation:** reserve **15–20% of each cycle's capacity**
+  for register items, chosen by the hotspot ordering. Debt work that waits
+  for "a quiet period" waits forever — there is no quiet period. The
+  allocation is small enough to survive busy cycles and large enough to
+  compound.
+- **Tag new debt at merge time:** reviewers (Gate 5b) name deliberate debt
+  when they approve it — "this shortcut is acceptable if it enters the
+  register today" — so debt is taken on as a recorded decision, never
+  discovered later as an accident. Undocumented shortcuts found in the wild
+  become register entries on discovery, without blame.
+
+## 5. The periodic ops rhythm
+
+Maintenance fails when it depends on remembering. It works when it is a
+calendar. Minimum rhythm:
+
+| Cadence | Ritual | Contents |
+|---|---|---|
+| **Weekly** | Dependency triage + error review | The §1 update queue merged or deferred with reasons; new vulnerability findings checked against the §3 SLA; the week's production errors/incidents skimmed for anything recurring that nobody filed |
+| **Monthly** | Restore drill + cost review + access review | Restore the latest backup to an isolated environment and verify it (a failed drill is a P1 defect — see release-engineering §6); review cloud/service spend against last month and flag unexplained growth; review who/what still has access to production, admin panels, and secrets — remove what is no longer needed |
+| **Quarterly** | DR test + dependency/EOL audit + SLO review | A fuller disaster-recovery exercise against the RPO/RTO commitments; the EOL inventory (§2) re-checked against endoflife.date with owners/dates confirmed; SLO targets and error-budget history reviewed — targets tightened, loosened, or re-instrumented deliberately, never by drift; patch-SLA compliance trend reviewed |
+
+Every ritual produces a short written record (what was checked, what was
+found, what became a task). A ritual with no record is assumed not to have
+happened — the same evidence rule as every gate in this OS.
+
+## 6. Feedback intake — the loop back to Gate 0
+
+A running system generates work: user feedback, support reports, feature
+requests, recurring complaints, your own monitoring insights. None of it
+enters development by osmosis.
+
+- **Collect in one place:** every signal lands in a single intake list,
+  however it arrived (support channel, app-store review, user message,
+  monitoring observation). Signals noted "somewhere in chat" are signals
+  lost.
+- **Triage on the ops rhythm:** the weekly slot (§5) also sorts new intake
+  into: defect (route to the bug-fix path), small improvement (fast-lane
+  candidate), real feature/change (→ Gate 0), or not-actionable (recorded
+  with the reason — "won't fix" is a decision, not an omission).
+- **Nothing bypasses the front door:** accepted feedback becomes work only
+  by entering at **Gate 0** like any other task — clarified, specced, routed.
+  A maintainer's favorite user request gets no shortcut past the gates; that
+  is what keeps the feedback loop from becoming a second, shadow roadmap.
+- **Close the loop with the source:** when feedback ships, note it in the
+  release notes; when it is declined, the reason exists in the intake record
+  if the user ever asks. People who report problems and hear nothing stop
+  reporting — and their reports were free QA.
+- **Watch the aggregate, not just the items:** the quarterly review (§5)
+  also reads the intake list as data — the same complaint arriving ten times
+  is a defect with ten reporters, and a theme across requests is product
+  evidence for the BA's next discovery pass. Intake that is only ever
+  processed item-by-item never gets to say the big thing it knows.
 
 
 ---
@@ -4348,7 +4737,7 @@ URL/account differs); and **never** use real users' data for testing.
 
 ## 7. Light DORA (measure to improve, not to report)
 
-Track only 2–4 numbers, recorded monthly, and watch the trend:
+Track the current **five** DORA metrics, recorded monthly, and watch the trend:
 - **Deployment Frequency:** how many production releases in the month — steady,
   small, and frequent usually beats rare, huge batches for safety.
 - **Lead Time for Changes:** from code approval to running in production — an
@@ -4357,11 +4746,34 @@ Track only 2–4 numbers, recorded monthly, and watch the trend:
 - **Change Failure Rate:** the share of releases that cause an incident or need a
   rollback — the most important number for this gate; a continuous rise is the
   signal to tighten the checklist/smoke test.
-- **Time to Restore:** from incident to restoration — measurable thanks to having
-  a good rollback plan.
+- **Failed-Deployment Recovery Time:** from a failed or degraded deployment to
+  the service being restored (rollback or fix) — measurable thanks to having a
+  good rollback plan.
+- **Deployment Rework Rate:** the share of deployments that are themselves
+  unplanned rework — hotfixes and re-deploys fixing a previous deployment. A
+  rising rework rate means the pipeline is producing work about its own work.
 
 Never use these numbers to compare different projects against each other; only
 compare against yourself over time.
+
+**DORA's AI-era findings (2025 research — the current benchmark):** AI
+assistance **amplifies** whatever delivery system it lands in. Throughput rises,
+but stability suffers unless the surrounding practices are strong — the
+capabilities that separate teams gaining from AI from teams destabilized by it
+include **small batches**, **strong version-control discipline**, and a
+**quality internal platform** (reliable environments, fast feedback, paved
+paths). Read against this OS: the gates, the small-batch habit, and the
+verification steps are not overhead on top of AI speed — they are the mechanism
+that keeps the stability metrics above from degrading as throughput rises.
+
+**Expectation setting — the verification tax and the J-curve:** adopting
+AI-assisted development (or this OS) typically *slows* a team before it speeds
+it up: output volume grows faster than review capacity, so human verification
+time per change rises (the verification tax), and delivery performance often
+dips for the first weeks-to-months before recovering above the starting point
+(the J-curve). Plan for it: judge the process on a quarter's trend, not the
+first fortnight, and never respond to the dip by cutting the verification steps
+— that converts a temporary dip into a permanent stability problem.
 
 
 ---
@@ -4425,6 +4837,8 @@ Flags are debt instruments: cheap to open, expensive to forget.
 | Manual approval | Before production | — | Yes — a named human, per this repo's gate law |
 
 - **Artifact immutability:** the artifact built once from a commit is the artifact that travels staging → production (same binary/image, promoted, never rebuilt per environment). Rebuilding for prod means prod runs code that staging never tested.
+- **SBOM per release:** every release generates a **Software Bill of Materials** (CycloneDX or SPDX format) from the actual build and archives it with the release record. The SBOM diff against the previous release is reviewed as part of the release check: an unexpected new component — especially a new transitive dependency nobody added deliberately — is a finding to explain before deploy, not a curiosity to notice after an incident. The SBOM is also the inventory the mobile-store privacy check (App Privacy / Data Safety vs. actual SDKs) is verified against.
+- **Signing & provenance:** release artifacts are **signed** (keyless signing, e.g. Sigstore cosign, so no long-lived signing keys exist to leak) and ship with build **provenance** — target **SLSA Build Level 2** (signed provenance from a hosted build platform). Generating provenance is only half the control: at deploy time the pipeline **verifies** the signature and provenance of the exact artifact being promoted, and a verification failure blocks the deploy like a failed test. An unsigned or unverifiable artifact is treated as an unknown artifact, however it arrived.
 - **Pipeline speed is a quality feature:** a 45-minute pipeline teaches developers to batch changes and skip runs. Keep the merge-blocking path under ~10 minutes; push slow suites to nightly/pre-release stages (and then actually gate on them there).
 - **Flaky pipeline tests** follow the QA flaky protocol (quarantine with expiry) — a pipeline people habitually re-run is a pipeline that protects nothing.
 
@@ -4434,6 +4848,12 @@ Flags are debt instruments: cheap to open, expensive to forget.
 - **The 4 golden signals** (per service, dashboarded): **Latency** (p50/p95/p99, successful vs failed separately), **Traffic** (requests/s), **Errors** (rate and count, by class), **Saturation** (CPU/memory/queue depth — how full the system is before it falls over).
 - **Alert quality rules:** an alert must be **actionable** (a human can do something specific), **urgent** (it cannot wait for business hours), and **symptom-based** (users are affected) rather than cause-based (a disk *might* fill next week — that's a ticket). Every alert links its runbook (§7). An alert that fires and is ignored three times is deleted or fixed at the next review — alert fatigue is an outage you schedule for later.
 - **The release connection:** every deploy is annotated on the dashboards. Half of incident diagnosis is "what changed?" — the annotation answers it in one glance.
+
+**SLOs & error budgets — turning the golden signals into commitments:**
+- For each user-facing service, define **1–3 SLOs** — no more; an SLO nobody would page over is decoration. Each SLO states: the **SLI** (a user-experience ratio from the golden signals, e.g. "share of checkouts completing without a 5xx or a timeout"), the **target** (e.g. 99.9%), and the **window** (rolling 30 days is the usual default).
+- **Burn-rate alerting:** alert on how fast the error budget is being consumed, not only on raw error counts — a slow leak that will exhaust the budget in 3 days deserves a page-shaped ticket today; a brief spike that costs 0.1% of the budget does not deserve a 3 a.m. call. Multi-window burn-rate alerts (fast burn → page, slow burn → ticket) are the standard shape.
+- **The error-budget policy (the part with teeth):** while budget remains, feature releases proceed normally. **When the budget is exhausted, feature releases freeze** — only reliability fixes and security patches ship — until the budget recovers. This rule is agreed with the gate approver *before* it first triggers; negotiating it during an outage means it does not exist.
+- The go/no-go checklist (§9) therefore includes the budget's current status: shipping a feature release into an exhausted budget requires the same kind of written, named risk acceptance as any other gate override.
 
 ## 6. Backup & disaster recovery
 
@@ -4478,6 +4898,7 @@ Run at the release gate; any unchecked box is either fixed or converted into a n
 - [ ] Migrations: reversible, or forward-fix plan written; backup verified restorable (§6 drill is current)
 - [ ] Feature flags: states for launch set deliberately; kill switches for risky features tested (§2)
 - [ ] Dashboards annotated; alerts for the golden signals active; on-call named for the monitoring window
+- [ ] Error budget status checked (§5): budget not exhausted, or the feature release carries a written, named risk acceptance
 - [ ] Comms ready: release notes for users/support, status-page draft if the change is user-visible
 - [ ] Calendar check: no freeze window, no colliding business event, approver and fixer available for the window (§8)
 
@@ -4502,9 +4923,9 @@ Run at the release gate; any unchecked box is either fixed or converted into a n
 
 ---
 name: security-engineer
-description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10, OWASP ASVS, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
+description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10 (2025), OWASP ASVS 5.0.0, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -4560,6 +4981,18 @@ Non-negotiable principles:
 
 ### Part A — Before code (Gate 4)
 
+#### Step 0 — Early-input mode (only when routing question 6 = Yes)
+When the Gate 0 routing decision tree's question 6 = Yes, Security does not wait for Gate 4 to speak
+for the first time. While the Architect is still working at Gate 2, issue a short **"Known security
+requirements"** note to the Architect — this is the input the Architect's skill lists as received from
+Security. The note is deliberately brief and contains only what would be expensive to retrofit:
+the data classification (Step 2), the mandatory controls the design must leave room for (e.g.
+server-side permission enforcement points, tenant isolation, audit logging), forbidden patterns
+(e.g. secrets on the client, client-supplied prices), and any permission-model constraints from the BA.
+The note is **not** the Gate 4 review: the full threat model, permission matrix, and SEC-REQ list in
+Steps 1–6 still happen at Gate 4, on the completed architecture and API contract — and the Gate 4
+review checks the design against this note as well.
+
 #### Step 1 — Draw the data flow and the trust boundaries
 1.1. List every actor (including unauthenticated actors, third-party systems, and admins).
 1.2. Draw the data flow: where sensitive data is created, what it passes through, where it is stored,
@@ -4567,9 +5000,9 @@ who can read it, and when it is deleted.
 1.3. Mark the trust boundaries: the points where data crosses from an untrusted zone (browser, network,
 third party) into a trusted zone (server, DB). Every crossing point needs a check — list all of them.
 
-#### Step 2 — Classify the data and choose the ASVS level
+#### Step 2 — Classify the data and choose the ASVS 5.0.0 level
 2.1. Classify data by sensitivity: public / internal / personal / highly sensitive (identity, financial, health).
-2.2. Choose the applicable ASVS level: L1 is the floor for every application; L2 when there is auth,
+2.2. Choose the applicable ASVS 5.0.0 level: L1 is the floor for every application; L2 when there is auth,
 personal data, or money; L3 only for very high-risk systems. Record the chosen level + the reason in the file.
 2.3. Derive the corresponding requirements: password/session policy, encryption in transit and at rest,
 logging, backup.
@@ -4603,6 +5036,8 @@ store outside executable directories, let the server generate file names, scan f
 #### Step 6 — Write the security requirements + hand the tests to QA
 6.1. Consolidate into a numbered SEC-REQ-xx list: each requirement must be verifiable
 (e.g. "SEC-REQ-03: Every endpoint that reads data by ID MUST check ownership on the server; test: QA-SEC-02").
+When a requirement derives from ASVS, its citation must carry the version-prefixed ASVS 5.0.0
+requirement ID (e.g. `v5.0.0-2.1.1`) — a bare clause number is ambiguous across editions.
 6.2. Hand QA the list of mandatory security tests (full sample in `references/playbook.md`): wrong-permission
 access, IDOR, expired/revoked tokens, malicious input (basic injection/XSS payloads), rate limits,
 the password-reset flow, excessive data in responses.
@@ -4629,7 +5064,7 @@ conclude more broadly than the scope actually checked.
 
 **This repo's files:**
 - `templates/SECURITY.template.md` — the frame for your `04-security.md` output.
-- `references/playbook.md` in this skill folder — the OWASP Top 10 table, ASVS levels, per-component STRIDE,
+- `references/playbook.md` in this skill folder — the OWASP Top 10 (2025) table, ASVS 5.0.0 levels, per-component STRIDE,
   the permission-matrix method, the secret rules, and the QA test handover list. Read it during the work.
 - `skills-index/SKILLS-INDEX.md` — the curated external skills with install commands and safety notes.
 
@@ -4641,7 +5076,7 @@ conclude more broadly than the scope actually checked.
   XSS, auth/authz, crypto), `find-bugs`, and `gha-security-review` for GitHub Actions.
   Install: `npx skills add https://github.com/getsentry/skills --skill security-review`
 - GitHub awesome-copilot — `agent-owasp-compliance`: checks an agent system against the OWASP ASI Top 10.
-- OWASP skill packs (ASVS/Top 10) — look up verification requirements by ASVS clause when you need detail.
+- OWASP skill packs (ASVS 5.0.0 / Top 10) — look up verification requirements by ASVS clause when you need detail.
 
 ## 6. What To Look Up
 
@@ -4652,9 +5087,10 @@ conclude more broadly than the scope actually checked.
 - **OWASP API Security Top 10** — search when the task exposes any API. The three failures to sweep
   separately for every API: BOLA/IDOR (object IDs from the client without an ownership check — the #1 API
   flaw), Broken Authentication / Excessive Data Exposure, and Mass Assignment.
-- **OWASP ASVS** (Application Security Verification Standard) — search by clause when you need: the exact
+- **OWASP ASVS 5.0.0** (Application Security Verification Standard) — search by clause when you need: the exact
   verifiable requirement for a control (session management, password policy, logging, cryptography) and
-  which level (L1/L2/L3) your situation demands. Level guide: playbook section 2.
+  which level (L1/L2/L3) your situation demands. Cite requirements by their version-prefixed ID
+  (e.g. `v5.0.0-2.1.1`). Level guide: playbook section 2.
 - **STRIDE + the Threat Modeling Manifesto's 4 questions** — use when structuring Step 3: What are we
   building? What can go wrong? What are we doing about it? Did we do enough? The per-component STRIDE
   sample table is in playbook section 3.
@@ -4668,7 +5104,7 @@ conclude more broadly than the scope actually checked.
 
 **Rules for looking things up:**
 - Every mandatory countermeasure in `04-security.md` must cite the source it comes from (OWASP class,
-  ASVS clause, or the stack's official doc) — a requirement with no source is an opinion, and opinions
+  ASVS 5.0.0 clause, or the stack's official doc) — a requirement with no source is an opinion, and opinions
   do not block gates.
 - When uncertain whether a pattern is actually a vulnerability: record [TBC] with a proposed verification
   method. Never assert safety you have not verified, and never inflate an unverified suspicion into a Critical.
@@ -4677,6 +5113,8 @@ conclude more broadly than the scope actually checked.
 
 ## 7. Outputs
 
+- **Early-input note** (only in early-input mode, Step 0): the short "Known security requirements" note
+  issued to the Architect before Gate 4.
 - **`04-security.md`** in the task folder, following `templates/SECURITY.template.md`, containing:
   1. The data flow + trust boundaries of the feature.
   2. The STRIDE table per component + the corresponding mandatory countermeasures.
@@ -4703,7 +5141,7 @@ Feature: "A user views invoice detail via a link containing the invoice ID."
 
 **Before code:**
 - [ ] Data flow drawn, all actors included (including unauthenticated + third parties), trust boundaries marked
-- [ ] Data classified by sensitivity; ASVS level chosen with a recorded reason
+- [ ] Data classified by sensitivity; ASVS 5.0.0 level chosen with a recorded reason
 - [ ] STRIDE covers all 6 groups for every component; every threat has a countermeasure or is recorded as an open risk
 - [ ] Permission matrix covers actor × action × data; every check is enforced server-side
 - [ ] Swept separately: BOLA/IDOR, vertical/horizontal privilege escalation, excessive data in responses
@@ -4730,7 +5168,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 | TC-04-04 | BOLA/IDOR: a user cannot read or modify another user's data | QA executes the handed-over test: signed in as user A, request user B's object by its ID | Test result showing 403/404 on cross-owner access, attached to the QA security test results |
 | TC-04-05 | Privilege escalation is blocked, vertically and horizontally | QA executes: a regular user calls an admin-only endpoint; a same-role user accesses another owner's data | 403 responses recorded for both attempts in the security test results |
 | TC-04-06 | No secrets in code, repo, client bundle, or logs | Scan the diff and the built client bundle for keys/tokens/passwords; inspect log samples for raw sensitive data | Scan output with zero findings; log samples show masked values only |
-| TC-04-07 | Every SEC-REQ is numbered, sourced, and traced to a QA test | Cross-check the SEC-REQ list in `04-security.md` against its cited sources (OWASP/ASVS/stack doc) and the QA handover list | Each SEC-REQ-xx names its source and at least one QA test ID; no orphan requirements |
+| TC-04-07 | Every SEC-REQ is numbered, sourced, and traced to a QA test | Cross-check the SEC-REQ list in `04-security.md` against its cited sources (OWASP / ASVS 5.0.0 version-prefixed clause ID / stack doc) and the QA handover list | Each SEC-REQ-xx names its source and at least one QA test ID; no orphan requirements |
 | TC-04-08 | The post-integration re-check closes the gate honestly | Review the findings list: every finding graded with a reproduction; confirm Critical/High = 0, or a signed risk acceptance exists | Findings section with graded reproductions; gate conclusion stating exactly what was checked and what could not be checked |
 
 ## 10. Common Failures & Anti-Patterns
@@ -4760,7 +5198,7 @@ if the flaw is in the design).
 - `STATUS.md` updated.
 
 **(c) Your handoff checklist (complete before passing):**
-- [ ] Every SEC-REQ is numbered, verifiable, and cites its source (OWASP/ASVS/stack doc)
+- [ ] Every SEC-REQ is numbered, verifiable, and cites its source (OWASP / ASVS 5.0.0 version-prefixed clause ID / stack doc)
 - [ ] Every SEC-REQ traces to at least one QA test in the handover list
 - [ ] Every cell of the permission matrix names where it is enforced on the server
 - [ ] Every threat without a countermeasure is recorded as an open risk, not deleted
@@ -4790,11 +5228,11 @@ if the flaw is in the design).
 
 ## 12. References
 
-- `references/playbook.md` — the deep playbook: the OWASP Top 10 table, ASVS levels, per-component STRIDE,
+- `references/playbook.md` — the deep playbook: the OWASP Top 10 (2025) table, ASVS 5.0.0 levels, per-component STRIDE,
   the permission-matrix method, the secret rules, the QA test handover list.
-- `references/security-by-app-type.md` — read at the start of Gate 4 once the application type is known: per-type top threats, specific controls, and mandatory tests for web apps, REST APIs, mobile, multi-tenant SaaS, payments, file-upload, realtime/chat, and admin tools, plus cross-type secrets & logging hygiene.
+- `references/security-by-app-type.md` — read at the start of Gate 4 once the application type is known: per-type top threats, specific controls, and mandatory tests for web apps, REST APIs, mobile, multi-tenant SaaS, payments, file-upload, realtime/chat, admin tools, and AI/LLM & agentic features, plus cross-type secrets & logging hygiene.
 - `templates/SECURITY.template.md` — the frame for `04-security.md`.
-- Primary sources: OWASP Top 10, OWASP ASVS, OWASP API Security Top 10, Threat Modeling Manifesto, NIST SSDF.
+- Primary sources: OWASP Top 10 (2025), OWASP ASVS 5.0.0, OWASP API Security Top 10, Threat Modeling Manifesto, NIST SSDF, NIST SP 800-63B-4.
 
 
 ---
@@ -4805,27 +5243,27 @@ if the flaw is in the design).
 
 > Read while working Gate 4 and the re-check after Integration. SKILL.md gives the workflow; this file gives the lookup tables.
 
-## 1. OWASP Top 10 — Review Checklist (common web/API edition)
+## 1. OWASP Top 10 (2025 edition) — Review Checklist (common web/API edition)
 
 | # | Risk class | What to check in your project |
 |---|---|---|
-| A01 | Broken Access Control | Does every endpoint check permissions on the server? Is there IDOR (changing an ID to see someone else's data)? Vertical/horizontal privilege escalation? Are directory listings/debug endpoints exposed? |
-| A02 | Cryptographic Failures | Is sensitive data encrypted in transit (TLS) and at rest? Are passwords hashed with a dedicated algorithm (bcrypt/argon2…)? Is there any home-grown or weak cryptography? |
-| A03 | Injection | Are all DB queries parameterized? Is any string concatenated into SQL/commands/templates? Is reflected input escaped against XSS? |
-| A04 | Insecure Design | Does the threat model exist before the code? Are business limits (attempt counts, quotas, link expiry) designed in? |
-| A05 | Security Misconfiguration | Is debug mode off in production? Is CORS restricted to the correct origins? Are security headers + cookie flags (HttpOnly, Secure, SameSite) correct? Do error messages leak stack traces? |
-| A06 | Vulnerable & Outdated Components | Are there dependencies with unapplied patches? Any unmaintained library in the path of sensitive data? |
-| A07 | Identification & Authentication Failures | Password policy, brute-force protection (rate limit/temporary lockout), do sessions/tokens expire and can they be revoked? Does the password-reset flow resist account takeover? |
+| A01 | Broken Access Control (SSRF is folded into this class in the 2025 edition) | Does every endpoint check permissions on the server? Is there IDOR (changing an ID to see someone else's data)? Vertical/horizontal privilege escalation? Are directory listings/debug endpoints exposed? Does the server fetch URLs supplied by users (SSRF)? If so: host allowlist, block internal addresses, limit redirects. |
+| A02 | Security Misconfiguration | Is debug mode off in production? Is CORS restricted to the correct origins? Are security headers + cookie flags (HttpOnly, Secure, SameSite) correct? Are default credentials changed and unnecessary features/services/ports disabled? Do error messages leak stack traces? |
+| A03 | Software Supply Chain Failures (NEW in 2025 — expanded from "Vulnerable & Outdated Components") | Are dependencies pinned with lockfiles and integrity-verified (hashes/signatures)? Are there dependencies with unapplied patches, or unmaintained libraries in the path of sensitive data? Is the build pipeline itself protected (CI credentials scoped, only trusted actions/plugins, no untrusted install scripts run automatically)? Do update mechanisms deliver signed/trustworthy updates? |
+| A04 | Cryptographic Failures | Is sensitive data encrypted in transit (TLS) and at rest? Are passwords hashed with a dedicated algorithm (bcrypt/argon2…)? Is there any home-grown or weak cryptography? Are keys managed and rotatable? |
+| A05 | Injection | Are all DB queries parameterized? Is any string concatenated into SQL/commands/templates? Is reflected input escaped against XSS? |
+| A06 | Insecure Design | Does the threat model exist before the code? Are business limits (attempt counts, quotas, link expiry) designed in? |
+| A07 | Authentication Failures (renamed in 2025 from "Identification & Authentication Failures") | Password policy per the authentication baseline in section 2, brute-force protection (rate limit/temporary lockout), do sessions/tokens expire and can they be revoked? Does the password-reset flow resist account takeover? |
 | A08 | Software & Data Integrity Failures | Is data received from third parties/webhooks verified for signature/integrity? Does CI/CD run untrusted code? Is deserialization of foreign data controlled? |
-| A09 | Logging & Monitoring Failures | Are security events (failed logins, permission changes, denied access) logged (redacted) and actually reviewed by someone? |
-| A10 | Server-Side Request Forgery (SSRF) | Does the server fetch URLs supplied by users? If so: host allowlist, block internal addresses, limit redirects. |
+| A09 | Security Logging and Alerting Failures (renamed in 2025 — alerting is now required, not just logging) | Are security events (failed logins, permission changes, denied access) logged (redacted)? Does an alert actually fire and reach someone who acts on anomalies (failed-login spikes, privilege changes) — or do the logs just accumulate unread? |
+| A10 | Mishandling of Exceptional Conditions (NEW in 2025) | Do error paths fail closed or fail open — can an exception skip a permission check, trigger a permissive fallback, or leave a transaction half-applied? Do unhandled exceptions leak internal state or stack traces? Are error paths tested, not only happy paths? |
 
 **OWASP API Security — 3 failures to sweep separately for every API:**
 1. **BOLA/IDOR** — an object identified by a client-supplied ID without an ownership check. The #1 API flaw.
 2. **Broken Authentication / Excessive Data Exposure** — weak/non-expiring tokens; responses returning surplus fields.
 3. **Mass Assignment** — accepting a whole object from the client and writing it straight to the DB, allowing forbidden fields (role, balance, status) to be modified.
 
-## 2. ASVS Levels — Which Level to Choose
+## 2. ASVS 5.0.0 Levels — Which Level to Choose
 
 | Level | When | Characteristics |
 |---|---|---|
@@ -4835,6 +5273,20 @@ if the flaw is in the design).
 
 Record the chosen level in `04-security.md` with the reason. Choosing a lower level than the situation
 requires must be signed by the approver.
+
+**Citation rule:** ASVS references in this repo are always to **ASVS 5.0.0**. When a SEC-REQ derives from
+ASVS, cite the version-prefixed requirement ID (e.g. `v5.0.0-2.1.1`) — bare clause numbers are ambiguous
+across editions and do not trace.
+
+### Authentication baseline (NIST SP 800-63B-4)
+
+Apply wherever passwords / sign-in exist; deviations need a recorded reason.
+
+- **Length over complexity:** single-factor passwords must allow — and require — at least **15 characters**. No composition rules (no forced mix of upper/lower/digit/symbol); they push users to predictable patterns without adding real strength.
+- **No forced periodic rotation:** passwords are changed on evidence of compromise, not on a calendar schedule.
+- **Breached-password blocklist:** screen new/changed passwords against a blocklist of breached and commonly used passwords; reject matches.
+- **Phishing resistance at AAL2:** where ASVS 5.0.0 L2 applies, verifiers must offer at least one phishing-resistant option (e.g. WebAuthn/passkeys or an equivalent) alongside passwords.
+- **Recovery is login-grade:** account recovery and password-reset flows are hardened to the same standard as login itself — rate-limited, single-use expiring credentials, owner notified — because attackers attack the weakest of the two doors.
 
 ## 3. STRIDE per Component — Sample Table
 
@@ -4922,7 +5374,7 @@ scoring scales wholesale.
 
 # Security by Application Type — Deep Dive
 
-> Read when: Gate 4 starts and you know what kind of application this is. The playbook gives the method (threat modeling, ASVS, permission matrices); this file gives the per-type threat lists, controls, and mandatory tests.
+> Read when: Gate 4 starts and you know what kind of application this is. The playbook gives the method (threat modeling, ASVS 5.0.0, permission matrices); this file gives the per-type threat lists, controls, and mandatory tests.
 > How to use: take the section(s) matching the app type, merge their controls into `04-security.md`, and copy their tests into the mandatory QA handover list. Most real systems match 2–3 sections — apply all of them.
 
 ## Which sections apply? — Identification table
@@ -4937,6 +5389,7 @@ scoring scales wholesale.
 | Users upload files others can download/view | (f) |
 | Live messaging, channels, presence, feeds with push | (g) |
 | Any staff-only console, back office, or ops panel | (h) — even a "temporary" one |
+| Chatbot, RAG, copilot, summarization, or an agent that calls tools/APIs | (i) + whichever data sections match |
 
 ## (a) Classic Web App (server-rendered or SPA + session/token auth)
 
@@ -5075,11 +5528,48 @@ Controls:
 - Data exports are the exfiltration path: permission-gate them, log them, watermark/notify for large ones.
 - Admin surfaces are excluded from public indexes/routes where possible, but obscurity is a bonus layer, never the control.
 
+Zero-trust minimums (checklist — network location grants nothing):
+- [ ] Phishing-resistant MFA (WebAuthn/passkeys or hardware keys) required for admin access — not SMS/app codes alone
+- [ ] SSO for every admin/internal tool; authorization is least-privilege, role-scoped, and enforced per request — being "inside the network" is never itself a permission
+- [ ] Access tokens for admin tooling are short-lived and scoped to the tool and role; no standing broad-access tokens
+- [ ] No shared admin accounts — every privileged action traces to a person (see audit log above)
+- [ ] No long-lived credentials for CI pipelines or AI agents: use workload identity / OIDC federation issuing short-lived tokens instead of stored cloud keys or PATs
+- [ ] Agent/tool credentials are scoped to exactly the actions that automation performs, and are revocable independently of any human's credentials
+
 Mandatory tests:
 - [ ] Low-privilege staff role attempts a destructive/bulk action → denied AND the attempt is in the audit log
 - [ ] Every privileged action in a scripted session appears in the audit log with actor, object, timestamp
 - [ ] Break-glass account use triggers its alert/logging path
 - [ ] Session of a deactivated employee → access denied everywhere, including existing sessions
+
+## (i) AI / LLM & Agentic Features
+
+Based on the OWASP Top 10 for LLM Applications (2025) and the OWASP Agentic AI threat list (ASI). Apply whenever the product embeds a model: chatbots, RAG over documents, copilots, summarization/generation, or agents that call tools and APIs.
+
+Top threats: prompt injection — direct (user) and **indirect** (instructions hidden in retrieved documents, web pages, emails, or tool results the model reads), sensitive information disclosure (the model regurgitating PII, another user's data, or its own system prompt), excessive agency (an agent with broad tools talked into destructive actions), unbounded consumption (cost/DoS via runaway tokens and loops). Agentic themes on top: goal hijack, tool misuse, identity & privilege abuse, memory/context poisoning, cascading failures across chained agents/tools.
+
+Controls:
+- **Treat model output as untrusted input (LLM05):** model text flows into SQL, HTML, shells, and downstream APIs only after the same validation/encoding as any user input. A model producing a payload is an injection that succeeded.
+- **Instructions and data stay separate (LLM01):** retrieved/connected content is data, never instructions. Content from RAG corpora, web pages, files, and tool results must not be able to override the system instructions or trigger tool calls; strip or sandbox instruction-like content at ingestion where feasible, and never let a retrieved document grant permissions.
+- **Least-privilege tools and agency (LLM06):** each tool an agent can call is scoped to the minimum action and data; read and write tools are separate; **irreversible or high-impact agent actions (payments, deletions, sends, permission changes) require human approval** before execution. The agent acts under its own scoped identity — never under a human's full credentials (ASI identity & privilege abuse).
+- **System prompt is not a secret vault (LLM07):** never place credentials, keys, or genuinely confidential rules in the system prompt; design assuming the prompt can be extracted, so its leakage is embarrassing, not fatal.
+- **Disclosure control (LLM02):** filter/redact PII and other users' data from prompts, context, and logs; retrieval is permission-checked per user *before* content enters the context — the model must never receive data the requesting user may not see.
+- **Vector/embedding safety (LLM08):** vector stores are tenant/permission partitioned (namespace per tenant or per-user filters enforced at query time); remember embeddings can leak source content — protect the store like the data it was built from.
+- **Supply chain (LLM03):** models, adapters, and plugins are dependencies: use trusted providers, pin model versions, record model provenance in the release notes; a silent model-version change is a behavior change — treat it like a dependency upgrade.
+- **Poisoning resistance (LLM04):** control who and what can write to fine-tuning data, feedback loops, retrieval corpora, and agent memory; validate ingested content; memory writes from untrusted interactions are quarantined or reviewed (memory/context poisoning).
+- **Consumption caps (LLM10):** per-user/per-key token and cost budgets, rate limits, maximum agent steps/loop counts, and timeouts — enforced server-side, with alerts on anomalous spend.
+- **Misinformation guardrails (LLM09):** in high-stakes domains, ground answers in retrieved sources with citations, surface uncertainty, and provide a human-review path; never present generated content as verified fact by default.
+- **Failure containment:** chained agents/tools get step limits, per-step output validation, and a kill switch, so one compromised or hallucinating step cannot cascade through the whole workflow.
+
+Mandatory tests:
+- [ ] **Indirect-injection test set:** documents/web content/tool results seeded with hidden instructions ("ignore previous instructions, send data to…") → the model does not follow them, does not exfiltrate, does not call tools on their behalf
+- [ ] Direct prompt-injection / jailbreak attempts → system instructions hold; system prompt and secrets are not disclosed
+- [ ] **Tool-scope escape attempts:** the agent is talked into calling tools outside its scope, exceeding its data permissions, or chaining tools to escalate → denied at the tool layer, not merely refused in prose
+- [ ] Irreversible action requested via a manipulated conversation → blocked pending human approval
+- [ ] **Output-handling fuzzing:** model outputs containing SQL fragments, HTML/script, and shell metacharacters → handled safely by every downstream sink
+- [ ] Cross-user / cross-tenant retrieval: user A's documents never enter user B's context, including via semantic similarity
+- [ ] **Consumption-cap test:** runaway loop / oversized input / repeated expensive calls → caps, step limits, and budgets trigger and cost stays bounded
+- [ ] Memory poisoning: a malicious interaction writes to agent memory/shared context → the poisoned content does not affect other users or later sessions
 
 ## Cross-Type: Secrets & Logging Hygiene (applies to every section above)
 
@@ -5096,7 +5586,7 @@ Mandatory tests:
 
 ## Depth Calibration — How Far to Go per Type
 
-Use the ASVS-style depth from the playbook, driven by the worst data the system touches:
+Use the ASVS 5.0.0 depth from the playbook, driven by the worst data the system touches:
 
 | System profile | Minimum depth | Notes |
 |---|---|---|
@@ -5116,7 +5606,7 @@ When two profiles collide (e.g. a small team shipping payments), the higher dept
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Solution Architect — Gate 2
@@ -5286,7 +5776,7 @@ When the current state of the system is uncertain: inspect more of the real code
 |---|---|---|
 | `02-arch-fe.md` and/or `02-arch-be.md` | C4 at the needed level, the module map (new/modified/do-not-touch), the main data flows, compliance constraints for UI/UX & Dev, the NFRs and how they are met | Structure per Section 4 |
 | `02-api-contract.md` | Every endpoint in scope: request/response, errors + error codes, auth, pagination, versioning | `templates/API-CONTRACT.template.md` |
-| `adr/ADR-xxxx-<slug>.md` (when there is a major decision) | Context, decision, considered alternatives, consequences | `templates/ADR.template.md` |
+| `docs/adr/ADR-xxxx-<slug>.md` — in the **project repo**, never in the task folder (when there is a major decision) | Context, decision, considered alternatives, consequences | `templates/ADR.template.md` |
 | The migration section inside `02-arch-be.md` | The data-change plan + deployment safety (details in the playbook) | — |
 
 ## 8. Worked Example
@@ -5653,7 +6143,7 @@ Rule: an NFR without a number is recorded as an `[ASSUMPTION]` together with the
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # UI/UX Design — Gate 3
@@ -5703,7 +6193,7 @@ Non-negotiable principles:
 |---|---|---|
 | Approved spec (scope, out of scope, success criteria) | Gate 0 — `00-spec-and-routing.md` | Stop; send back to the Orchestrator |
 | User stories + Acceptance Criteria | Gate 1 — `01-ba.md` | Stop; send back to the BA |
-| FE architecture frame: layout system, shared components, what may / may not be broken | Gate 2 — `02-arch-fe.md` | Stop; send back to the Architect |
+| FE architecture frame: layout system, shared components, what may / may not be broken | Gate 2 — `02-arch-fe.md` | **Conditional:** required when the Architect ran. When the Routing Decision skipped the Architect (prototype/demo, or FE-only with no structural change), the Gate 0 spec's UI sketch stands in as the frame — record the substitution at the top of `03-design.md` and proceed. Never deadlock a routed task over a skipped role's artifact; send back to the Architect only when the Architect ran and the file is missing |
 | Existing design system, brand, tokens, icon system | `constitution/PROJECT-PROFILE.md` + the project repo | Ask the user; never invent a new system |
 | Routing Decision confirming UI/UX is in scope for this task | Gate 0 | Do not expand the scope yourself |
 
@@ -5813,10 +6303,11 @@ decisions need approval, and what is still [TBC].
     colors, icons, and logo apply here. This is the highest law inside the project.
   - WCAG 2.2 (AA level) — answers: required contrast ratios, focus visibility, target size, and whether
     information may be conveyed by color alone.
+  - WCAG 3.0 is a W3C Working Draft referenced by no law — do not design or audit against it; build to WCAG 2.2 AA.
   - Nielsen Norman Group, 10 Usability Heuristics — answers: whether a flow is self-auditable for system
     status, consistency, error prevention, and recovery.
-  - Apple Human Interface Guidelines — answers: iOS/macOS platform patterns (navigation, touch areas, dynamic type).
-  - Material Design 3 — answers: Android/web platform patterns (components, motion, adaptive layout).
+  - Apple Human Interface Guidelines — Liquid Glass era (iOS 26+, 2025) — answers: iOS/macOS platform patterns (navigation, touch areas, dynamic type). In the Liquid Glass era the glass material belongs to the control/navigation layer only, never the content layer; designs must be tested with Reduce Transparency on and at both clarity extremes (clear ↔ opaque).
+  - Material 3 Expressive (2025+, Android 16 era) — answers: Android/web platform patterns: spring-physics motion, expressive shapes and type scale, dynamic color, 48dp touch targets, adaptive layout.
 - **Tier 2 — Searchable design data:**
   - UI/UX Pro Max datasets — search by product type (dashboard, e-commerce, SaaS, health app…) and stack when
     you need: which layout/palette/font pairing fits this product type, and the reasoning rule behind it.
@@ -5836,6 +6327,7 @@ decisions need approval, and what is still [TBC].
 **Rules for looking things up:**
 - Every major decision in `03-design.md` must cite its source and which tier it belongs to. A decision based
   only on Tier 3 must be marked as a judgment call requiring the approver's confirmation.
+- Platform guideline citations must carry a version/date (e.g. "iOS 26 HIG", "Material 3 Expressive, 2025") and be re-verified at each major platform release — platform design languages now change yearly, and an undated citation silently goes stale.
 - When two sources conflict, apply the tier order: Tier 1 standards beat Tier 2 lookup data, Tier 2 beats
   Tier 3 inspiration — and the project's DS beats all three.
 - When uncertain about a platform behavior, search the platform's own guideline (HIG / Material) for that
@@ -5944,10 +6436,155 @@ QA later uses your design as the visual reference when verifying the built UI.
 
 - `references/playbook.md` — the deep UI/UX playbook (the 3-tier source system, the 5-state spec, the WCAG
   table, the research method, the audit checklist, the anti-AI-slop list).
+- `references/ai-feature-ux.md` — read whenever the feature being designed CONTAINS AI (chat, generation, recommendations, copilots): the AI UX pattern checklist, autonomy tiers, the AI component states, and AI disclosure as a design deliverable.
 - `references/design-systems.md` — read when creating, extending, or auditing a design system: token architecture, typography/spacing systems, the 12-part component spec, theming & dark mode, icon construction, motion tokens, design-to-code handoff, and design QA tolerances.
 - `templates/` in this repo — the SPEC/BA templates that define your inputs; the `03-design.md` output
   follows the structure in section 7.
 - `skills-index/SKILLS-INDEX.md` — the curated external skills with install commands and safety warnings.
+
+
+---
+
+# ===== SKILL REFERENCE — skills/ui-ux-design/references/ai-feature-ux.md =====
+
+# AI Feature UX — Designing Features That Contain AI
+
+> Read this whenever the feature being designed CONTAINS AI: chat assistants, text/image
+> generation, summarization, recommendations, copilots, smart search, classification.
+> A deterministic screen either works or it doesn't. An AI feature is a **distribution,
+> not a binary** — the same input class produces a range of outputs, some wrong. The UX
+> discipline below exists to make that distribution safe and legible to the user.
+
+## 1. The core shift
+
+- "Done" for an AI feature means: a **target acceptable-output rate on a scoped input
+  class** (defined with the BA as rate-based acceptance criteria), plus a **graceful
+  tail** — every output below the bar must fail visibly, recoverably, and without
+  damaging user data or trust.
+- Design the failure and recovery flows with the same care as the happy path. For AI
+  features, recovery is not an edge case; statistically, it is a main flow.
+- One confidently wrong output presented as fact can destroy trust in the whole
+  feature. When the system is unsure, the interface must show that — uncertainty is
+  information, not weakness.
+- **Scope the input class.** The acceptable-output rate is only meaningful against a
+  defined class of inputs ("questions about the user's own orders", not "any
+  question"). The design must make that scope visible — placeholder text, example
+  prompts, and out-of-scope handling all teach the user what the feature is for.
+  Inputs outside the class route to the Refused state (§4), not to an improvised answer.
+- **Design the graceful tail explicitly.** For each AI flow, name in advance what the
+  user gets when output is bad: a retry with a different phrasing, a form that captures
+  the request for a human, a link to the non-AI way of doing the same task. If the
+  tail is "the user gives up", the feature is not designed yet.
+
+## 2. Pattern checklist (apply every item that fits)
+
+| Pattern | What it requires in the design |
+|---|---|
+| Streaming output | Long generations render progressively with a visible generating state, a stop/cancel control, and no layout jump when the stream completes |
+| Citations / provenance | Factual claims generated from sources carry visible citations or source links the user can open; uncited generated claims are visually distinguishable from sourced ones |
+| Confidence / uncertainty display | Low-confidence results are marked as such (label, hedging language, visual treatment); the UI never presents a guess with the same authority as a verified fact |
+| Human override | Every AI-produced artifact can be edited, corrected, or replaced by the user before it takes effect; the AI's version is a draft until the user accepts it |
+| Undo at every step | Every AI-initiated change offers undo for a reasonable window; "the AI did it" is never a dead end |
+| Escalation to a human | A visible path from the AI flow to a human (support, reviewer, approver) when the AI cannot help, keeps failing, or the user asks |
+| Error recovery as a primary flow | Retry, regenerate, rephrase, and "start over" are first-class actions; a failed generation preserves the user's input and context |
+| Capability disclosure | The interface shows what the AI can and cannot do in this feature (scope, data it uses), before the user relies on it |
+| Feedback capture | Beyond thumbs up/down: capture corrections, regenerations, and edits — the correction itself is the highest-value signal (see §6) |
+| Input guidance | Example prompts, scope hints, and structured inputs (chips, templates, pickers) that steer users into the input class the feature handles well — guidance is cheaper than recovery |
+
+## 3. Autonomy tiers — match autonomy to the cost of error
+
+Decide the tier per action, not per feature. State the tier in `03-design.md`.
+
+| Tier | Behavior | Use when |
+|---|---|---|
+| 1 — Suggest | AI proposes; nothing happens until the user acts on the proposal | Default starting tier for any new AI capability |
+| 2 — Approve | AI prepares the complete action; the user reviews and confirms before it executes | The action has real effects but is reversible, or review is cheap |
+| 3 — Act with review | AI executes; the result is surfaced for after-the-fact review with undo | Low cost of error, high volume, fully reversible |
+
+Hard rules:
+- **Irreversible actions are always gated by human confirmation**, regardless of tier:
+  sending, paying, deleting, publishing, changing permissions, anything another person
+  will see or rely on.
+- Autonomy may only be raised with evidence (measured acceptable-output rate on real
+  usage), never by default or by schedule. Record the evidence when the tier changes.
+- The tier is visible in the UI where it matters: the user must be able to tell whether
+  they are looking at a suggestion, a pending action awaiting their approval, or a
+  completed action they can still undo.
+
+## 4. The AI states — extension to the component anatomy
+
+The standard 5 states (default, loading, empty, error, success) are not enough for AI
+components. Every AI component spec must also cover:
+
+| State | Design requirement |
+|---|---|
+| Generating | Progressive/streaming rendering, elapsed indication for long runs, stop control |
+| Partial | An interrupted or truncated result is marked as partial — never silently presented as complete |
+| Low-confidence | Visually distinct treatment + the wording tells the user to verify; offer the verification path (source, human, retry) |
+| Refused | The AI declined (out of scope, policy, missing data): say why in user language and offer the nearest allowed alternative or the human path |
+| Failed | Generation errored: preserve input, offer retry/regenerate, never show a blank or a fake result |
+| Overridden | The user edited or replaced the AI output: the UI reflects the user's version as authoritative; do not silently re-apply the AI version |
+
+## 5. AI disclosure — a design deliverable, not a legal footnote
+
+- Users must be told **they are interacting with AI, clearly, at the first
+  interaction** — in the interface itself. A line in the terms and conditions does
+  not count as disclosure.
+- AI-generated content that could be mistaken for human or factual content carries a
+  visible "AI-generated" label; where the platform supports it, generated media also
+  carries **machine-readable marking** (metadata/watermarking) so the marking survives
+  copying and re-sharing.
+- Disclosure design is part of `03-design.md` for any feature that interacts with
+  users as AI or generates synthetic content — reviewed at the gate like any other
+  screen, not appended afterward.
+- Do not design anthropomorphism that implies capabilities the system does not have
+  (a name, avatar, and typing indicator are fine; implying memory, feelings, or
+  authority the system lacks is not).
+
+## 6. Anti-patterns
+
+| Anti-pattern | Why it breaks |
+|---|---|
+| Fake confidence | Presenting every output with identical certainty and polish, including guesses — the user cannot calibrate trust, and the first visible error discredits everything |
+| Silent failure | A failed or refused generation shows an empty state, a generic error, or worst of all a plausible-looking fabricated result |
+| No-undo automation | AI actions that execute irreversibly with no confirmation and no undo path |
+| Thumbs-up as the only feedback | Thumbs reward confident, agreeable answers — including confidently wrong ones. Track corrections, regenerations, and escalations instead (QA uses these as production health signals) |
+| Automation creep | Quietly raising the autonomy tier (suggest → auto-apply) without new evidence or a design review |
+| Human-looking deception | Avatars/names/persona copy that lead users to believe they are dealing with a person |
+| Dead-end refusal | "I can't help with that" with no reason, no alternative, and no human path |
+
+## 7. Worked micro-example — a support-chat assistant
+
+Feature: an in-app assistant that answers questions about the user's own orders.
+
+- **Input class (scoped):** order status, delivery, returns for the signed-in user's
+  orders. Anything else → Refused state with a link to human support and to the
+  general help center. The placeholder text says exactly this scope.
+- **Tiers:** answering = Tier 1 (suggest — text only). Drafting a return request =
+  Tier 2 (the assistant fills the form; the user reviews and submits). Submitting the
+  return itself is never automated: irreversible-ish and user-visible, so it stays
+  behind the user's own confirmation click.
+- **States in the spec:** Generating (streamed answer + stop), Low-confidence (order
+  lookup returned conflicting data → answer is hedged, shows both sources, offers the
+  human path), Refused (question about another person's order → explains why, offers
+  support), Failed (lookup service down → preserves the question, retry button, and a
+  "check order status manually" link as the graceful tail).
+- **Disclosure:** a persistent "AI assistant — answers may be wrong; verify order
+  details on the order page" line at the top of the chat, shown before the first
+  message is sent. Exported chat transcripts carry an "AI-generated" header.
+- **Feedback captured:** corrections via "this is wrong" → reason picker; every
+  escalation to a human is logged with the conversation ID — these feed QA's
+  production health signals, not a thumbs counter.
+
+## 8. Gate additions for AI features
+
+When the feature contains AI, `03-design.md` must additionally record:
+- [ ] The autonomy tier per AI action, with the irreversible actions listed and their confirmation design
+- [ ] All six AI states (§4) designed for every AI component
+- [ ] The confidence/uncertainty treatment: what triggers "low-confidence" display and what it looks like
+- [ ] The disclosure design (§5): where the AI disclosure appears and how generated content is labeled/marked
+- [ ] The recovery flows: retry/regenerate/edit/escalate, reachable from every AI failure state
+- [ ] The feedback signals the UI captures (corrections, regenerations, escalations) and where they surface
 
 
 ---
@@ -6149,8 +6786,10 @@ Developer's side of the contract: build from tokens and specs; where the spec is
 | The project's design system + brand (PROJECT-PROFILE) | Tokens, components, identity colors, icons, logo — the highest law inside the project |
 | WCAG 2.2 (AA level) | Contrast, focus, target size, never conveying information by color alone |
 | Nielsen Norman Group — 10 Usability Heuristics | Self-auditing a flow: visibility of system status, match with the real world, user control, consistency, error prevention, recognition over recall, flexibility, minimalism, understandable error messages, help |
-| Apple Human Interface Guidelines | iOS/macOS platform patterns: navigation, touch areas, dynamic typography |
-| Material Design 3 | Android/web platform patterns: components, motion, adaptive layout |
+| Apple Human Interface Guidelines — Liquid Glass era (iOS 26+, 2025) | iOS/macOS platform patterns: navigation, touch areas, dynamic typography. Glass material belongs to the control/navigation layer only, never the content layer; test with Reduce Transparency on and at both clarity extremes (clear ↔ opaque) |
+| Material 3 Expressive (2025+, Android 16 era) | Android/web platform patterns: spring-physics motion, expressive shapes and type scale, dynamic color, 48dp touch targets, adaptive layout |
+
+**AI disclosure:** whenever a feature interacts with users as AI or generates synthetic content, the disclosure UI (see `references/ai-feature-ux.md`) is a design deliverable — users must be told they are interacting with AI at first interaction, not in a terms-and-conditions line.
 
 ### Tier 2 — Searchable design data
 - **UI/UX Pro Max:** look up by product type (dashboard, e-commerce, SaaS, health app…) and stack.
@@ -6354,6 +6993,45 @@ If ≥3 of these signs appear in one artifact → treat it as not yet audited, a
 
 ---
 
+# ===== TEMPLATE — templates/GATE-REPORT.template.md =====
+
+# GATE REPORT — Gate [N] · [Role] · Task: [task name]
+Date: [ ] · Reported by: [role] · Artifact: [file name]
+
+## 1. Objective
+[What this gate had to achieve, per the spec and the Routing Decision — one or two sentences.]
+
+## 2. What was done
+- [Work performed, in order. Name the artifact(s) produced or changed.]
+
+## 3. Verification results
+[How the work was checked, and the evidence: logs, screenshots, file:line references, measured values.]
+
+Gate test cases: Total: [N] · PASS: [N] · FAIL: [N] · BLOCKED: [N]
+
+| ID | Result (PASS / FAIL / BLOCKED) | Evidence |
+|---|---|---|
+| TC-… | | |
+
+[Any FAIL follows the Test-Case Gate law: full stop + a Failure Report. Any BLOCKED case is listed here with its reason — a gate with a BLOCKED case is not PASS.]
+
+## 4. Open issues & risks
+- [Issue / risk, its owner, and what it blocks — or "None known".]
+
+## 5. Conditions to pass this gate
+- [ ] [Condition — from the role's gate checklist and the spec's success criteria]
+
+## 6. Recommended next step
+[One concrete step: the next gate, a rework item, or a decision the user must make.]
+
+## 7. Status
+NOT STARTED / IN PROGRESS / AWAITING APPROVAL / COMPLETE
+
+**Rule: never mark COMPLETE unless every condition in §5 is met.** This status is the role's own report; the gate verdict itself (PASS / REWORK / STOP) belongs to the user and is recorded in STATUS.md by the Orchestrator.
+
+
+---
+
 # ===== TEMPLATE — templates/RELEASE.template.md =====
 
 # 08 — RELEASE: [Task name]
@@ -6412,6 +7090,10 @@ If ≥3 of these signs appear in one artifact → treat it as not yet audited, a
 |---|---|---|---|---|
 | S-01 | … | requirement / constraint / preference / clarify / out-of-scope / conflict | REQ-01 | mapped |
 Coverage result: Segments: [N] · Mapped: [N] · Unmapped: [must be 0]
+## 13. Roadmap (phases — fill in when the work ships in more than one phase; otherwise "Single phase")
+| Phase | Scope | Acceptance milestone |
+|---|---|---|
+| 1 | … | … |
 
 
 ---
@@ -6419,6 +7101,7 @@ Coverage result: Segments: [N] · Mapped: [N] · Unmapped: [must be 0]
 # ===== TEMPLATE — templates/STATUS.template.md =====
 
 # STATUS — [Task name]
+Completion level: [ ] (WRITTEN → SYNTAX-CHECKED → RUN → TESTED → DEPLOYED → USER-ACCEPTED — per Constitution §14, every completion claim names its level)
 | Gate | Role | Artifact | Status (⏳/🔁/✅/⛔) | Approved by | Date |
 |---|---|---|---|---|---|
 | 0 | Orchestrator | 00-spec-and-routing.md | ⏳ | | |
@@ -6448,11 +7131,22 @@ Coverage result: Segments: [N] · Mapped: [N] · Unmapped: [must be 0]
 > Install with the skills CLI: `npx skills add <owner>/<repo> --skill <skill-name>`, or via your tool's plugin marketplace.
 > ⚠️ **Safety:** A skill is instructions (sometimes with scripts) that runs with your agent's privileges. Always read a third-party skill's `SKILL.md` before installing it; prefer repos from the owning organizations (Anthropic, GitHub, Vercel, Sentry, Trail of Bits) and actively maintained, widely used repos. Never install an unknown skill into a project containing sensitive data without reading it first.
 
+## ✅ Before you install any third-party skill — the vetting checklist
+
+Run every item, for every skill, every time — including updates to skills you already trust:
+
+- [ ] **Read the `SKILL.md` in full** — not the README, not a summary. The SKILL.md is what the agent will actually follow.
+- [ ] **Read any scripts in full** (`scripts/`, bundled executables, install hooks). Scripts run with your agent's privileges; a skill whose prose is innocent can still ship a script that is not. If you cannot read what a script does, do not install the skill.
+- [ ] **Check the permissions it asks for:** the frontmatter's `allowed-tools` (or equivalent), any network calls, file-system scope, and credential/environment access the instructions imply. Ask: does this skill need *this* access to do *its* job? Excess permission is a finding, not a detail.
+- [ ] **Prefer official and reputable sources:** the owning organization's repo first (Anthropic, GitHub, Vercel, Sentry, Trail of Bits…), then widely used, actively maintained community repos. Treat a fresh fork of a famous skill as a different, unvetted skill.
+- [ ] **Pin the source and the version:** install from a specific repo at a specific commit/tag where the tooling allows it, and record what you installed. "Latest from somewhere" is not a version.
+- [ ] **Re-check on update:** an update is a new install for vetting purposes — diff the SKILL.md and scripts against the version you vetted before accepting it. Trust attaches to the version you read, not to the repo's name.
+
 ## ⭐ Foundations (every role should know these)
 | Skill / Repo | Use for | Install |
 |---|---|---|
 | [anthropics/skills](https://github.com/anthropics/skills) — Anthropic's official repo: `frontend-design`, `webapp-testing`, `skill-creator`, `mcp-builder`, document skills | The reference for how a skill should be written; `skill-creator` to author new skills | `/plugin marketplace add anthropics/skills` |
-| [github/spec-kit](https://github.com/github/spec-kit) — GitHub's Spec-Driven Development toolkit (MIT): constitution → specify → clarify → plan → tasks → implement → converge | Gate 0 and this repo's whole spec philosophy | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` |
+| [github/spec-kit](https://github.com/github/spec-kit) — GitHub's Spec-Driven Development toolkit (MIT), **v1.4.x** as of late 2026: constitution → specify → clarify → plan → tasks → implement → converge, now with **Extensions** (community workflow add-ons), **Presets** (organization-specific overrides of the built-in templates/commands), and **skills-mode installs** (Spec Kit can install itself as agent skills, not only as a CLI). **Pin the version you adopt** — the toolkit evolves fast; upgrade deliberately and re-read the changelog, don't drift | Gate 0 and this repo's whole spec philosophy | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` (pin a release tag for reproducibility) |
 | [obra/superpowers](https://github.com/obra/superpowers) — a complete methodology pack: brainstorming, writing-plans, TDD, systematic-debugging, code review, subagent-driven development | Developer + QA + the bootstrap-rule pattern | `/plugin install superpowers@claude-plugins-official` |
 | [bmad-code-org/BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) — an agile team as agent personas: Analyst, PM, Architect, UX, Dev, QA (MIT) | A full "agent company" model to compare against | `npx bmad-method install` |
 | Large collections for further discovery: [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) (400+ skills across domains), [CODE-SAURABH/OpenSkills](https://github.com/CODE-SAURABH/OpenSkills) (49 role-based skills: system-design, security-engineer, qa-engineer, devops-platform, spec-author…) | When a role needs a specialist skill not listed above | `/plugin marketplace add alirezarezvani/claude-skills` |

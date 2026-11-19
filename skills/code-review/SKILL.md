@@ -2,7 +2,7 @@
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)
@@ -26,6 +26,10 @@ Non-negotiable principles:
 6. **Never fix code yourself during review** (except an obvious one-line fix with the author's agreement,
    recorded). A reviewer who fixes and then approves their own fix destroys independence.
 7. **Escalate security suspicions to Security** — never conclude "probably nothing" yourself.
+8. **Two stages, in fixed order.** Stage 1 — *spec compliance*: does the code do what the spec, AC, and
+   contract say? Stage 2 — *code quality*: security, complexity, tests, naming, style. Stage 2 is
+   concluded only after Stage 1 passes; a Stage-1 failure returns the work without a Stage-2 pass —
+   elegant code that does the wrong approved thing is still the wrong thing.
 
 ## 2. When to Use / When NOT to Use
 
@@ -58,21 +62,28 @@ Non-negotiable principles:
 
 ## 4. What To Do — Step-by-Step Workflow
 
-### Step 1 — Understand the change before reading code
+The workflow runs as **two stages in fixed order**. **Stage 1 — spec-compliance review**
+(Steps 1–3): does the code do what the spec/AC and the contract say? Judge from the actual
+code — the dev notes are a claim to be verified, never evidence of compliance. **Stage 2 —
+code-quality review** (Steps 4–5): the security sweep, complexity, tests, naming, and style.
+If Stage 1 fails, the verdict is REQUEST CHANGES on compliance grounds and there is no
+Stage-2 pass; return the work. Only a change that passes Stage 1 earns a Stage-2 conclusion.
+
+### Step 1 — Understand the change before reading code (Stage 1)
 1.1. Read the dev notes + spec/AC + contract: what does this change *claim* to do, and in what scope?
 1.2. Look at the diff overview: the file list, the size, whether any file lies outside the claimed scope.
 A strange/out-of-scope file is the first finding to raise — even if the code in it is "good".
 1.3. Identify the sensitive areas in the diff (auth, permissions, money, data, migrations, configuration)
 for a deep sweep in Step 4.
 
-### Step 2 — Independently verify Dev's evidence
+### Step 2 — Independently verify Dev's evidence (Stage 1)
 2.1. Re-run (or reliably reconcile) the main commands: build, related tests. Results that differ from the
 dev notes → a finding.
 2.2. Read Dev's tests as code: do the tests actually check the behavior the AC describes, or only check
 "does not crash"? Do edge/error tests exist?
 2.3. Record in the review what you re-ran yourself — a reviewer who ran nothing must say so.
 
-### Step 3 — Review Design & Functionality
+### Step 3 — Review Design & Functionality (Stage 1)
 3.1. **Design:** is the change placed in the right layer/module? Does it break architecture boundaries,
 create dependency cycles, or duplicate logic that already exists elsewhere? Does it match the contract
 (fields, errors, auth) point by point?
@@ -82,14 +93,14 @@ and concurrent paths (two operations at once) corrupting data.
 3.3. For FE: cross-check the design — all states present, terminology matching, no self-invented
 components outside the DS.
 
-### Step 4 — Sweep security in the diff
+### Step 4 — Sweep security in the diff (Stage 2)
 Walk the sensitive-pattern list in `references/playbook.md`; at minimum: input not validated on the
 server · missing permission/ownership checks · string concatenation into queries · secrets in
 code/config · sensitive data in logs · excessive data returned · TLS/certificate verification disabled ·
 file paths taken straight from input. Any pattern found → at least a [SHOULD FIX] finding; if it touches
 real data/money/permissions → [BLOCKER] + call Security to confirm if you are unsure of the severity.
 
-### Step 5 — Review Complexity, Tests, Naming/Comments/Style
+### Step 5 — Review Complexity, Tests, Naming/Comments/Style (Stage 2)
 5.1. **Complexity:** where could it be simpler with identical behavior? Abstractions built for needs that
 do not exist yet (YAGNI)? Newly added functions that are too long / carry too many responsibilities?
 5.2. **Tests:** does new behavior have tests; would the tests actually fail if the code were wrong (or are
@@ -167,7 +178,7 @@ with the words "fixed".
 
 - **The review document** — always its own file, `05-code-review.md`, where the verdict and
   findings live — containing:
-  1. The scope reviewed: the diff/branch, the artifacts checked against, the commands you re-ran + results.
+  1. The scope reviewed: the diff/branch, the artifacts checked against, the commands you re-ran + results; the Stage 1 (spec-compliance) result and — only if Stage 1 passed — the Stage 2 (code-quality) result.
   2. Findings in review order, each: severity label + file:line + the problem + the consequence + a fix suggestion.
   3. What could not be checked (and why) — recorded honestly.
   4. The verdict: **APPROVE** or **REQUEST CHANGES** + the list of [BLOCKER]s that must be handled.
@@ -188,6 +199,7 @@ Diff: an endpoint that updates a record by ID.
 ## 9. Gate Checklist
 
 - [ ] The reviewer is not the author of the change (or the limitation is explicitly declared)
+- [ ] Stage 1 (spec compliance) was concluded before Stage 2; a Stage-1 failure was returned without a Stage-2 pass
 - [ ] The change claim + spec/AC + related contract/design/SEC-REQs were read before reading code
 - [ ] The main build/tests were re-run personally; results recorded in the review
 - [ ] Design: correct layer/module, matches the contract, no duplicated logic, no out-of-scope files

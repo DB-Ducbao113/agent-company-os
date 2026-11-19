@@ -55,6 +55,8 @@ Users almost never volunteer NFRs; unasked, they become late-stage surprises. As
 | Concurrency | "What happens when two people do this at the same time?" | rule: block, queue, last-wins, or merge |
 | Availability | "If this is down for an hour, what breaks? When is downtime acceptable?" | criticality tier + maintenance window |
 | Security posture | "Who must NOT be able to see or do this? Is any of it personal, financial, or health data?" | named exclusions + data class |
+| AI features | "Does the product include AI features that interact with users or generate content? Which parts are AI-generated?" | named AI surfaces + disclosure items for the spec (users are told they interact with AI; generated content is marked as such) |
+| AI classification | "Does the feature consume a third-party model or provide/host one? Is the use case high-risk — hiring, credit, education, health, access to essential services?" | classification: consumer / provider · standard / high-risk (high-risk routes extra scrutiny at Gate 4) |
 | Devices & platforms | "Which devices/browsers/versions must it work on — including the oldest?" | explicit minimum (e.g. "Android 10+, Chrome last 2") |
 | Weak environments | "Will users be on slow networks or low-end devices? Must anything work offline?" | yes/no + which flows degrade how |
 | Accessibility | "Must it meet an accessibility standard? Which users with disabilities are expected?" | target (e.g. WCAG AA) or explicit non-goal |

@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [3.6.0] — 2026-11-19
+### Fixed — workflow logic (internal audit + GitHub benchmark vs BMAD / Spec Kit / Superpowers)
+- Integration can no longer issue a "conditional PASS" (it contradicted the Test-Case Gate law); conclusions are PASS/FAIL, with only a user-written override in STATUS.md as exception. Integration must also verify Code Review APPROVE before starting.
+- Routing deadlocks removed: when routing skips a role, downstream input tables accept the recorded substitution (Gate 0 spec / release plan) instead of stopping (Developer, UI/UX, Release input rules + a substitution rule in the routing matrix). UI/UX arch input is now conditional.
+- STATUS.md verdicts are recorded only by the Orchestrator; STOP now has a closure path; BLOCKED is a recognized test-case result (never PASS); routing Tool A vs Tool B conflicts resolve to the stricter requirement; ADRs live in the project repo; PROJECT-PROFILE has a named maintainer (the Orchestrator).
+### Added — workflow mechanisms
+- **Pre-Implementation Consistency Audit** after Gate 4 (read-only cross-check of the whole planning set, modeled on Spec Kit `analyze` / BMAD readiness gate); **work units + TDD + baseline check inside Gate 5**; **two-stage code review** (spec compliance before code quality); **Correct-course** protocol for mid-flight requirement changes; **Retrospective** after Gate 8; **Resume protocol** for new sessions; **mid-task approval law** (architecture changes, data deletion, risky DB changes, paid services, disruptive changes — one decision per approval); **GATE-REPORT template** and a 6-level completion vocabulary; roadmap section in the SPEC template; greenfield project setup in the Developer skill; minimal-change rule for bug fixes; condensed-BA rule.
+### Added — AI-era discipline
+- Security: app type (i) **AI / LLM ## [3.5.0] — 2026-11-19 agentic features** (OWASP LLM Top 10 2025 + ASI themes, 8 mandatory tests); Gate 0 AI classification + disclosure routing. BA: rate-based acceptance criteria + golden sets for probabilistic features. QA: evals as the AI test artifact + discipline for AI-generated tests and self-healing tools. UI/UX: new `ai-feature-ux.md` playbook (patterns, autonomy tiers, AI states, disclosure as a design deliverable).
+### Added — operations ## [3.5.0] — 2026-11-19 reliability
+- **operations-maintenance.md** (dependency automation, EOL tracking, patch cadence, tech-debt register, ops rhythm, feedback intake); **vulnerability patch SLA** (exploited+exposed ≤3 days, critical 14d, high 30d); **SLOs ## [3.5.0] — 2026-11-19 error budgets** with a release-freeze policy; **SBOM per release + artifact signing / SLSA Build L2 provenance verified at deploy**; mobile-store release checklist.
+### Changed — standards currency
+- OWASP Top 10 table rewritten to the **2025 edition**; **ASVS pinned to 5.0.0** with version-prefixed citations; authentication baseline per **NIST SP 800-63B-4**; zero-trust minimums for admin tooling; platform citations updated (**Material 3 Expressive**, **Apple Liquid Glass**) with a version/date rule; DORA refreshed to five metrics + AI capabilities note; Spec Kit index entry updated to v1.4.x.
+### Added — self-maintenance
+- **docs/UPSTREAM-WATCH.md** (the OS update mechanism: every upstream standard, its current version, and its update trigger) and **docs/EVALS.md** (WT-01…WT-10 as a versioned regression suite that blocks releases); "Why roles — and when NOT to split" (Anthropic field evidence) + harness/context-engineering vocabulary; third-party skill vetting checklist.
+
 ## [3.5.0] — 2026-11-19
 ### Added
 - **Native ChatGPT install packages** in `dist/` (built by `scripts/build-chatgpt-packages.py`): `agent-company-os-plugin.zip` (portable Agent Plugins layout: `plugin.json` + all 10 skills, Orchestrator as onboarding skill) for Plugins → Add → Upload plugin ZIP; and `chatgpt-skills/` + `chatgpt-skills-bundle.zip` with one upload-ready ZIP per role for Plugins → Skills → Add → Upload from your computer. Every skill ZIP bundles `references/os-core.md` (AGENTS + Constitution + workflow + routing + all templates) so the system holds together when skills are installed one by one, plus an `agents/openai.yaml` display file.

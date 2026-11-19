@@ -150,6 +150,7 @@ LICENSE · CONTRIBUTING.md · SECURITY.md ← MIT license, contribution rules, s
 - **Project truth in one file** (learned from pbakaus/impeccable): `/impeccable init` writes `PRODUCT.md` once and every later command re-reads it — here, that file is `PROJECT-PROFILE.md`.
 - **Searchable design data** (learned from nextlevelbuilder/ui-ux-pro-max): UI/UX decisions come from looking up style/palette/font/guideline data by product type, not from the model's "taste".
 - **A roster of roles with deliverables** (learned from BMAD-METHOD): Analyst → PM → Architect → Dev → QA, each role owning one concrete handover artifact.
+- **The OS is a harness, not a prompt** (context engineering, in current terms): the model is interchangeable; what makes behavior reliable is the control system around it — **feedforward** elements that guide the agent before it acts (AGENTS.md, the Constitution, the specs, the role skills) and **feedback** elements that catch it after it acts (per-gate test cases, the Test-Case Gate law, and the OS's own regression evals in `docs/EVALS.md`). Improve the harness and every model you plug into it gets better; the roles themselves are context partitions worn by one agent by default — see `docs/HOW-AGENTS-USE-THIS-REPO.md` for when splitting into separate agents is actually justified.
 
 ## License & attribution
 This repo's original structure and content: free to use for personal and commercial projects; attribution appreciated when redistributing.

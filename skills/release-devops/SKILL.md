@@ -2,7 +2,7 @@
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Release / DevOps — Gate 8
@@ -68,7 +68,15 @@ Immutable principles:
 
 **If an input is missing:** if `07-test-report.md` does not conclude PASS, or
 there is no explicit release order, **stop** — the prerequisites in Step 1 are not
-met and no urgency overrides them. If the previous release record is missing,
+met and no urgency overrides them. **One exception, set by routing, not by
+preference:** when the Routing Decision made QA smoke-only or skipped the full
+QA gate for this task (typical for infrastructure/deploy tasks, see
+`workflow/ROUTING-MATRIX.md`), the full `07-test-report.md` does not exist by
+design — in that case the release plan's own smoke test results (Steps 5 and 7)
+stand in for it, and the substitution is recorded explicitly in `08-release.md`
+("no full QA gate per routing; release smoke results used instead"). The
+stop-if-no-PASS rule applies in full whenever routing **did** require the full
+QA gate. If the previous release record is missing,
 establish the current production version and build identity by direct
 verification (Step 4.4) and record that this baseline was reconstructed, not read
 from a record.
@@ -151,6 +159,62 @@ from a record.
 8.3. A short lesson (retro): what almost went wrong, what to change in the
      checklist next time — record it in the release record for the next release
      to read.
+
+### Standing duty — vulnerability patch SLA (between releases)
+
+Patching known vulnerabilities is not release work that waits for the next
+feature train; it runs on its own clock, tiered by risk. **Owner: Release.
+Consulted: Security** (Gate 4 classifies severity and exploitability).
+
+| Tier | Condition | Deadline |
+|---|---|---|
+| Emergency | Vulnerability is **actively exploited** and the affected component is **internet-exposed** | **≤ 3 days**, including forensic triage (is the running system already compromised?) before or alongside patching |
+| Critical | Critical severity, not known to be exploited | **14 days** |
+| High | High severity | **30 days** |
+| Everything else | Medium/low, hardening, defense-in-depth | The next regular release cycle |
+
+Rules:
+- The clock starts when the vulnerability is known (scanner finding, advisory,
+  dependency alert) — not when someone gets around to triaging it.
+- A patch ships through the emergency/hotfix path (shortened, never skipped:
+  approval, minimal rollback plan, production smoke, record) when the tier's
+  deadline demands it.
+- **A missed SLA is reported to the user like a gate failure**: what is
+  unpatched, since when, the exposure, and the plan to close it. Silence about
+  an overdue patch is a process violation, not a scheduling choice.
+- If a patch cannot be applied (breaking upstream fix, no fix published),
+  record the compensating control (isolation, WAF rule, feature off) and the
+  re-check date in its place.
+
+### Mobile store releases — additional checklist
+
+When the release ships through an app store (Apple App Store / Google Play),
+the store is a second gatekeeper with its own deadlines. Run this checklist in
+addition to the steps above:
+
+- [ ] **SDK / target-API floors are current:** the build meets Apple's current
+      required Xcode/SDK version and Google Play's current target-API level.
+      ⚠️ **Standing rule: verify both against the store's own current deadline
+      page at release time.** These floors move roughly yearly and old blog
+      posts (and old versions of this skill) go stale — the store's page is
+      the only source that counts.
+- [ ] **Privacy labels match reality:** the App Privacy (Apple) and Data Safety
+      (Google) declarations are checked against the **actual** SDK/dependency
+      list in this build (use the release's SBOM/dependency inventory — see
+      `references/release-engineering.md` §4): every data-collecting SDK is
+      declared, nothing declared that the build does not do.
+- [ ] **Age-rating questionnaire is current** for both stores (an outdated
+      questionnaire can block updates outright).
+- [ ] **Closed-testing lead time is planned** for Google Play: new personal
+      developer accounts must complete closed testing (a set number of
+      testers over a set period) before production access — start it early;
+      it cannot be compressed at release time.
+- [ ] **Store AI / data-sharing disclosures are answered:** where the store
+      asks whether user data is shared with third-party AI services or used
+      to train models, the answers match the app's actual behavior and the
+      project's privacy declarations.
+- [ ] Review timelines are budgeted: store review is outside your control —
+      never promise a fixed public launch date that assumes instant approval.
 
 ### Decision points & hard situations
 - **Emergency release (hotfix) for an ongoing incident:** staging may be shortened
@@ -375,5 +439,6 @@ The gate approver will send the work back if:
   changelog format, the rollback plan template, how to design the smoke test
   set, post-release monitoring, basic incident response, and light DORA.
 - `references/release-engineering.md` — read when releases get serious: deployment strategies, feature-flag discipline, environment parity, CI/CD gating, observability minimums, backup/restore drills, incident runbook, release calendar.
+- `references/operations-maintenance.md` — read when the release is done and the system must stay healthy: dependency lifecycle automation, end-of-life tracking, the patch cadence, technical-debt management, the periodic ops rhythm, and feedback intake. This is the standing between-releases discipline, not per-release work.
 - `templates/RELEASE.template.md` — the release record template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision question 9).

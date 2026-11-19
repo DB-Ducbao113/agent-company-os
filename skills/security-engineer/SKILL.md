@@ -1,8 +1,8 @@
 ---
 name: security-engineer
-description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10, OWASP ASVS, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
+description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10 (2025), OWASP ASVS 5.0.0, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -58,6 +58,18 @@ Non-negotiable principles:
 
 ### Part A — Before code (Gate 4)
 
+#### Step 0 — Early-input mode (only when routing question 6 = Yes)
+When the Gate 0 routing decision tree's question 6 = Yes, Security does not wait for Gate 4 to speak
+for the first time. While the Architect is still working at Gate 2, issue a short **"Known security
+requirements"** note to the Architect — this is the input the Architect's skill lists as received from
+Security. The note is deliberately brief and contains only what would be expensive to retrofit:
+the data classification (Step 2), the mandatory controls the design must leave room for (e.g.
+server-side permission enforcement points, tenant isolation, audit logging), forbidden patterns
+(e.g. secrets on the client, client-supplied prices), and any permission-model constraints from the BA.
+The note is **not** the Gate 4 review: the full threat model, permission matrix, and SEC-REQ list in
+Steps 1–6 still happen at Gate 4, on the completed architecture and API contract — and the Gate 4
+review checks the design against this note as well.
+
 #### Step 1 — Draw the data flow and the trust boundaries
 1.1. List every actor (including unauthenticated actors, third-party systems, and admins).
 1.2. Draw the data flow: where sensitive data is created, what it passes through, where it is stored,
@@ -65,9 +77,9 @@ who can read it, and when it is deleted.
 1.3. Mark the trust boundaries: the points where data crosses from an untrusted zone (browser, network,
 third party) into a trusted zone (server, DB). Every crossing point needs a check — list all of them.
 
-#### Step 2 — Classify the data and choose the ASVS level
+#### Step 2 — Classify the data and choose the ASVS 5.0.0 level
 2.1. Classify data by sensitivity: public / internal / personal / highly sensitive (identity, financial, health).
-2.2. Choose the applicable ASVS level: L1 is the floor for every application; L2 when there is auth,
+2.2. Choose the applicable ASVS 5.0.0 level: L1 is the floor for every application; L2 when there is auth,
 personal data, or money; L3 only for very high-risk systems. Record the chosen level + the reason in the file.
 2.3. Derive the corresponding requirements: password/session policy, encryption in transit and at rest,
 logging, backup.
@@ -101,6 +113,8 @@ store outside executable directories, let the server generate file names, scan f
 #### Step 6 — Write the security requirements + hand the tests to QA
 6.1. Consolidate into a numbered SEC-REQ-xx list: each requirement must be verifiable
 (e.g. "SEC-REQ-03: Every endpoint that reads data by ID MUST check ownership on the server; test: QA-SEC-02").
+When a requirement derives from ASVS, its citation must carry the version-prefixed ASVS 5.0.0
+requirement ID (e.g. `v5.0.0-2.1.1`) — a bare clause number is ambiguous across editions.
 6.2. Hand QA the list of mandatory security tests (full sample in `references/playbook.md`): wrong-permission
 access, IDOR, expired/revoked tokens, malicious input (basic injection/XSS payloads), rate limits,
 the password-reset flow, excessive data in responses.
@@ -127,7 +141,7 @@ conclude more broadly than the scope actually checked.
 
 **This repo's files:**
 - `templates/SECURITY.template.md` — the frame for your `04-security.md` output.
-- `references/playbook.md` in this skill folder — the OWASP Top 10 table, ASVS levels, per-component STRIDE,
+- `references/playbook.md` in this skill folder — the OWASP Top 10 (2025) table, ASVS 5.0.0 levels, per-component STRIDE,
   the permission-matrix method, the secret rules, and the QA test handover list. Read it during the work.
 - `skills-index/SKILLS-INDEX.md` — the curated external skills with install commands and safety notes.
 
@@ -139,7 +153,7 @@ conclude more broadly than the scope actually checked.
   XSS, auth/authz, crypto), `find-bugs`, and `gha-security-review` for GitHub Actions.
   Install: `npx skills add https://github.com/getsentry/skills --skill security-review`
 - GitHub awesome-copilot — `agent-owasp-compliance`: checks an agent system against the OWASP ASI Top 10.
-- OWASP skill packs (ASVS/Top 10) — look up verification requirements by ASVS clause when you need detail.
+- OWASP skill packs (ASVS 5.0.0 / Top 10) — look up verification requirements by ASVS clause when you need detail.
 
 ## 6. What To Look Up
 
@@ -150,9 +164,10 @@ conclude more broadly than the scope actually checked.
 - **OWASP API Security Top 10** — search when the task exposes any API. The three failures to sweep
   separately for every API: BOLA/IDOR (object IDs from the client without an ownership check — the #1 API
   flaw), Broken Authentication / Excessive Data Exposure, and Mass Assignment.
-- **OWASP ASVS** (Application Security Verification Standard) — search by clause when you need: the exact
+- **OWASP ASVS 5.0.0** (Application Security Verification Standard) — search by clause when you need: the exact
   verifiable requirement for a control (session management, password policy, logging, cryptography) and
-  which level (L1/L2/L3) your situation demands. Level guide: playbook section 2.
+  which level (L1/L2/L3) your situation demands. Cite requirements by their version-prefixed ID
+  (e.g. `v5.0.0-2.1.1`). Level guide: playbook section 2.
 - **STRIDE + the Threat Modeling Manifesto's 4 questions** — use when structuring Step 3: What are we
   building? What can go wrong? What are we doing about it? Did we do enough? The per-component STRIDE
   sample table is in playbook section 3.
@@ -166,7 +181,7 @@ conclude more broadly than the scope actually checked.
 
 **Rules for looking things up:**
 - Every mandatory countermeasure in `04-security.md` must cite the source it comes from (OWASP class,
-  ASVS clause, or the stack's official doc) — a requirement with no source is an opinion, and opinions
+  ASVS 5.0.0 clause, or the stack's official doc) — a requirement with no source is an opinion, and opinions
   do not block gates.
 - When uncertain whether a pattern is actually a vulnerability: record [TBC] with a proposed verification
   method. Never assert safety you have not verified, and never inflate an unverified suspicion into a Critical.
@@ -175,6 +190,8 @@ conclude more broadly than the scope actually checked.
 
 ## 7. Outputs
 
+- **Early-input note** (only in early-input mode, Step 0): the short "Known security requirements" note
+  issued to the Architect before Gate 4.
 - **`04-security.md`** in the task folder, following `templates/SECURITY.template.md`, containing:
   1. The data flow + trust boundaries of the feature.
   2. The STRIDE table per component + the corresponding mandatory countermeasures.
@@ -201,7 +218,7 @@ Feature: "A user views invoice detail via a link containing the invoice ID."
 
 **Before code:**
 - [ ] Data flow drawn, all actors included (including unauthenticated + third parties), trust boundaries marked
-- [ ] Data classified by sensitivity; ASVS level chosen with a recorded reason
+- [ ] Data classified by sensitivity; ASVS 5.0.0 level chosen with a recorded reason
 - [ ] STRIDE covers all 6 groups for every component; every threat has a countermeasure or is recorded as an open risk
 - [ ] Permission matrix covers actor × action × data; every check is enforced server-side
 - [ ] Swept separately: BOLA/IDOR, vertical/horizontal privilege escalation, excessive data in responses
@@ -228,7 +245,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 | TC-04-04 | BOLA/IDOR: a user cannot read or modify another user's data | QA executes the handed-over test: signed in as user A, request user B's object by its ID | Test result showing 403/404 on cross-owner access, attached to the QA security test results |
 | TC-04-05 | Privilege escalation is blocked, vertically and horizontally | QA executes: a regular user calls an admin-only endpoint; a same-role user accesses another owner's data | 403 responses recorded for both attempts in the security test results |
 | TC-04-06 | No secrets in code, repo, client bundle, or logs | Scan the diff and the built client bundle for keys/tokens/passwords; inspect log samples for raw sensitive data | Scan output with zero findings; log samples show masked values only |
-| TC-04-07 | Every SEC-REQ is numbered, sourced, and traced to a QA test | Cross-check the SEC-REQ list in `04-security.md` against its cited sources (OWASP/ASVS/stack doc) and the QA handover list | Each SEC-REQ-xx names its source and at least one QA test ID; no orphan requirements |
+| TC-04-07 | Every SEC-REQ is numbered, sourced, and traced to a QA test | Cross-check the SEC-REQ list in `04-security.md` against its cited sources (OWASP / ASVS 5.0.0 version-prefixed clause ID / stack doc) and the QA handover list | Each SEC-REQ-xx names its source and at least one QA test ID; no orphan requirements |
 | TC-04-08 | The post-integration re-check closes the gate honestly | Review the findings list: every finding graded with a reproduction; confirm Critical/High = 0, or a signed risk acceptance exists | Findings section with graded reproductions; gate conclusion stating exactly what was checked and what could not be checked |
 
 ## 10. Common Failures & Anti-Patterns
@@ -258,7 +275,7 @@ if the flaw is in the design).
 - `STATUS.md` updated.
 
 **(c) Your handoff checklist (complete before passing):**
-- [ ] Every SEC-REQ is numbered, verifiable, and cites its source (OWASP/ASVS/stack doc)
+- [ ] Every SEC-REQ is numbered, verifiable, and cites its source (OWASP / ASVS 5.0.0 version-prefixed clause ID / stack doc)
 - [ ] Every SEC-REQ traces to at least one QA test in the handover list
 - [ ] Every cell of the permission matrix names where it is enforced on the server
 - [ ] Every threat without a countermeasure is recorded as an open risk, not deleted
@@ -288,8 +305,8 @@ if the flaw is in the design).
 
 ## 12. References
 
-- `references/playbook.md` — the deep playbook: the OWASP Top 10 table, ASVS levels, per-component STRIDE,
+- `references/playbook.md` — the deep playbook: the OWASP Top 10 (2025) table, ASVS 5.0.0 levels, per-component STRIDE,
   the permission-matrix method, the secret rules, the QA test handover list.
-- `references/security-by-app-type.md` — read at the start of Gate 4 once the application type is known: per-type top threats, specific controls, and mandatory tests for web apps, REST APIs, mobile, multi-tenant SaaS, payments, file-upload, realtime/chat, and admin tools, plus cross-type secrets & logging hygiene.
+- `references/security-by-app-type.md` — read at the start of Gate 4 once the application type is known: per-type top threats, specific controls, and mandatory tests for web apps, REST APIs, mobile, multi-tenant SaaS, payments, file-upload, realtime/chat, admin tools, and AI/LLM & agentic features, plus cross-type secrets & logging hygiene.
 - `templates/SECURITY.template.md` — the frame for `04-security.md`.
-- Primary sources: OWASP Top 10, OWASP ASVS, OWASP API Security Top 10, Threat Modeling Manifesto, NIST SSDF.
+- Primary sources: OWASP Top 10 (2025), OWASP ASVS 5.0.0, OWASP API Security Top 10, Threat Modeling Manifesto, NIST SSDF, NIST SP 800-63B-4.

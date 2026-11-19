@@ -143,3 +143,24 @@ Release: "patients can cancel appointments" (fictional). Risk table (§1) scores
 - Report (§8): verdict first, 5 numbers, top risk named ("refunds n/a — appointments are free; risk is slot integrity, covered by reconciliation check").
 
 Total planned: 23 scripted cases + 2 charters. That is what "enough testing" looks like when it is derived, not guessed.
+
+## 12. Testing AI features & AI-generated tests
+
+### (a) AI features: evals are the QA artifact
+
+Deterministic cases cannot verify a probabilistic feature. For any feature whose output is model-generated, QA's primary artifact is a **versioned eval set**, not a pass/fail case list:
+
+- **Source:** the golden set defined by the BA (see the BA playbook, "Acceptance criteria for probabilistic (AI) features") — representative real inputs, versioned, never edited mid-run.
+- **Scoring:** graded, not binary. Combine **code-based graders** (format checks, citation-existence checks — every cited source must actually resolve, keyword/constraint checks) with **human or model graders** applying the BA's acceptability rubric. Record the score distribution, not just an average.
+- **Launch gates:** the feature does not pass Gate 7 unless the eval meets the BA's stated thresholds: acceptable-output rate at or above target AND **zero critical failures**, with **hallucination rate** (claims with no supporting source) and **citation-existence rate** reported as named numbers in the test report.
+- **Regression:** the full eval re-runs on **every model, prompt, or retrieval-corpus change** — an eval result from a previous model version proves nothing about the current one. A threshold miss is a gate FAIL like any other.
+- **Production health signals** (agree them at the gate so Release can watch them): **correction rate** (users editing/fixing AI output), **regeneration rate**, **escalation-to-human rate**, and critical-failure reports. Explicitly **not** the thumbs-up rate: thumbs reward confident, agreeable answers — including confidently wrong ones — and a rising thumbs rate can hide a rising error rate.
+
+### (b) AI-generated tests and code: the discipline
+
+AI generation is now a normal source of both production code and test code. The rules that keep it safe:
+
+- **Generate tests from acceptance criteria and specs — never from the code under test.** A test generated from the implementation confirms the code agrees with itself; it cannot find the defect where the code misunderstood the requirement. (This extends the existing anti-pattern in the QA SKILL.md to generated tests.)
+- **Human review of generated tests is mandatory.** A generated test that always passes, asserts nothing meaningful, or quietly encodes the bug as the expected result is worse than no test — it manufactures confidence. Review generated tests like code: what behavior does this actually pin down?
+- **Self-healing tools have a hard boundary:** they may repair **locators and mechanics only** (a moved button, a renamed field). They may **never** change assertions, expected values, or test intent — a heal that weakens what the test verifies turns a failing product signal into a green lie. **Every heal is a reviewable diff**, approved by a human before it lands.
+- **Track the defect-escape rate of AI-generated changes** (defects found in production or at later gates, attributed to AI-generated code/tests) as a named figure in the test report. If AI-generated changes escape at a higher rate than human-written ones, the response is smaller batches and deeper review for generated changes — decided from the number, not from vibes.

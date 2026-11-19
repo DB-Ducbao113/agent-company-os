@@ -2,7 +2,7 @@
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -113,11 +113,13 @@ Users often send long, dense instructions. A long input is NOT a summary task �
 7.3. For each team, the Routing Decision must state: Mandatory / Conditional (what the condition is, who confirms it) / Skipped (the reason) + the running order + which teams may run in parallel + each team's input→output.
 7.4. **Fast lane:** only when the task changes no behavior, changes no layout, and touches no auth/money/personal data → shortened route: Dev → QA cross-check. Record "LANE: FAST" and which conditions allow this lane.
 7.5. Default order: BA → Architect → UI/UX → Security → Dev → Integration → QA → Release. Any change to this order needs a recorded reason in the Routing Decision.
+7.6. **Condensed BA (when routing skips the BA):** the Orchestrator condenses the BA essentials — the actors, the top user stories, and acceptance criteria for the main flow — into the spec itself, in a clearly marked `[CONDENSED BA]` block. Downstream roles treat that block as the BA input (see the substitution rule in `workflow/ROUTING-MATRIX.md`); a missing `01-ba.md` must never deadlock a task whose routing skipped the BA.
 
 ### Step 8 — Present Gate 0 for approval and open STATUS
 8.1. Create `STATUS.md` from the template, with Gate 0 in "awaiting approval" state.
 8.2. Present to the user in one go: playback + spec + routing, with the `[ASSUMPTION]`/`[TBC]` list highlighted so they approve it consciously.
 8.3. Only when the user approves: mark Gate 0 PASS in STATUS and hand off to the first team per Section 11. **Before that moment, no team may start.**
+8.4. **Coordination continues after Gate 0.** The Orchestrator stays the coordinator for the whole task: it records every gate verdict in STATUS.md (roles submit their status content; only the Orchestrator marks a gate PASS, and only on the user's verdict), and it runs or schedules the **Pre-Implementation Consistency Audit** after Gate 4 — the read-only cross-check of the complete planning set that must come back clean before Gate 5 starts (see `workflow/MASTER-WORKFLOW.md`).
 
 ### Handling hard cases
 

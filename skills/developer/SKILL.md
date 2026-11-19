@@ -2,7 +2,7 @@
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Developer (FE / BE) — Gate 5
@@ -36,6 +36,7 @@ Non-negotiable principles:
 - Implementing a feature against approved stories/AC (FE, BE, or both).
 - Building screens/components against an approved design, wiring APIs against the contract.
 - Writing endpoints, services, data queries, and migrations against the locked architecture.
+- Setting up a brand-new project's skeleton (Step 0) when routing identifies a greenfield task.
 - Fixing a bug that has reproduction information (from QA/a user).
 - Writing tests for new behavior or behavior being fixed.
 
@@ -52,13 +53,38 @@ Non-negotiable principles:
 | Input | Received from | If missing |
 |---|---|---|
 | Approved spec + Routing (Dev in scope, order clear) | Gate 0 — `00-spec-and-routing.md` | Stop; send back to the Orchestrator |
-| User stories + AC (to know what "correct" means and to write tests) | Gate 1 — `01-ba.md` | Stop; send back to the BA |
-| Architecture + API contract (endpoints, fields, errors, auth) | Gate 2 — `02-arch-*.md`, `02-api-contract.md` | Stop; send back to the Architect |
+| User stories + AC (to know what "correct" means and to write tests) | Gate 1 — `01-ba.md` | If routing required Gate 1 → Stop; send back to the BA. If routing skipped Gate 1 → the Gate 0 spec (incl. its [CONDENSED BA] section) stands in — see the substitution rule below |
+| Architecture + API contract (endpoints, fields, errors, auth) | Gate 2 — `02-arch-*.md`, `02-api-contract.md` | If routing required Gate 2 → Stop; send back to the Architect. If routing skipped Gate 2 → the Gate 0 spec stands in — see the substitution rule below |
 | Design + 5-state notes (for the FE part) | Gate 3 — `03-design.md` | Stop; send back to UI/UX |
 | Mandatory security requirements, SEC-REQ (if any) | Gate 4 — `04-security.md` | If the task touches auth/data/money and there is none → ask the Orchestrator/Security before coding |
-| The existing codebase + its conventions | Project repo + PROJECT-PROFILE | Read the repo first; never assume the structure |
+| The existing codebase + its conventions | Project repo + PROJECT-PROFILE | Read the repo first; never assume the structure (no repo yet → greenfield: Step 0) |
+
+**Substitution rule (routing skipped a gate):** when the Gate 0 Routing Decision explicitly
+skips Gate 1 and/or Gate 2 for this task, the approved Gate 0 spec — including any
+`[CONDENSED BA]` section it carries — stands in for `01-ba.md` and/or the architecture
+files. Record the substitution in `STATUS.md` (which artifact was substituted, and by
+what) before coding. "Stop; send back" applies only when routing *required* the artifact
+and it is missing or fails acceptance. If the spec lacks the detail needed to implement
+safely, that is a Gate 0 defect: send it back to the Orchestrator — never invent the
+missing detail.
 
 ## 4. What To Do — Step-by-Step Workflow
+
+### Step 0 — Greenfield setup (only when routing identifies a brand-new project)
+When the Routing Decision marks the task as a new project (no existing codebase), build
+the skeleton first — no feature work begins until the skeleton runs:
+0.1. `git init`; add the remote and push only with the user's explicit approval.
+0.2. Create the folder structure separating the app and its modules by feature (see
+`references/engineering-craft.md` §1), so boundaries and ownership are visible from day one.
+0.3. Write the `README`: what the project is and how to run it.
+0.4. Write `.gitignore` covering secrets, build output, and dependency folders.
+0.5. Write `.env.example` listing every environment variable the app requires — name +
+one-line purpose each, with NO real values.
+0.6. State the naming conventions once (files, modules, variables) in the README or a
+contributing note, and follow them from the first file.
+0.7. Configure the linter and the formatter for the stack; both must pass on the skeleton.
+0.8. Prove the skeleton runs: the empty app builds/starts and the test command passes.
+Record the commands and output in the dev notes — this is the project's first baseline.
 
 ### Step 1 — Read and plan the slices
 1.1. Read all inputs in section 3. Record the list of AC that must be satisfied and the SEC-REQs that must be obeyed.
@@ -67,15 +93,30 @@ Non-negotiable principles:
 end-to-end) first, edge/error slices after. Write the slice plan at the top of `05-dev-notes.md`.
 1.4. Any contradiction or gap in the artifacts → stop right here (the cheapest point), and ask the owning
 team. Never carry a contradiction into the code and let QA find it.
+1.5. **Decompose into work units.** Before coding, break the approved work into
+dependency-ordered **work units**: each unit names the exact files it touches, produces
+exactly one verifiable outcome, and carries its own check (the test or command that
+proves it). Order units so each builds only on the units before it. Record the unit
+list in `STATUS.md` as an enumerable list (unit → status) and execute strictly in
+order — a unit is done only when its own check passes. The slices of 1.3 are the plan's
+shape; the work units are its executable steps.
 
 ### Step 2 — Set up the verification frame first
-2.1. Confirm the project runs on the current machine: the original build/run/test commands are green
-*before* you change anything. If the baseline is already red → record it and report it clearly, so the
-old failures are not mixed with yours.
+2.1. **BASELINE check (before the first work unit):** confirm the pre-existing state
+builds and its tests pass — run the project's build and test commands on the untouched
+code and record the result in the dev notes. If the baseline is already red → record
+exactly which failures pre-exist and report it clearly. Later failures are judged
+against this record: a failure present in the baseline is not yours; a failure absent
+from the baseline is.
 2.2. Decide the verification commands you will use throughout the task (test runner, lint, build) and
 record them in the dev notes.
 
 ### Step 3 — Build each slice with TDD (for important logic)
+**TDD is the law inside every work unit:** the test comes first (RED), then the minimal
+code that passes (GREEN), then REFACTOR. Code written before its test exists is not kept
+and retro-fitted with a test afterwards — it is rewritten from the test. Waivers (e.g.
+pure presentation with no logic) follow the playbook and are recorded in the dev notes,
+never silent.
 For each slice:
 3.1. **RED:** write a test for the slice's behavior per the AC; run it; confirm it *fails for the right
 reason* (the behavior does not exist yet), not because of a syntax/environment error.
@@ -112,7 +153,8 @@ into the dev notes.
 out-of-scope changes.
 
 ### Step 7 — Submit to Code Review
-Complete the dev notes, update `STATUS.md`, and state the re-run commands so the reviewer can verify
+Complete the dev notes, update `STATUS.md` (every work unit marked done, with its check
+result), and state the re-run commands so the reviewer can verify
 independently. Never declare "gate passed" yourself — that is the conclusion of Code Review and the later gates.
 
 ## 5. What To Use
@@ -194,6 +236,7 @@ Story: "The user filters the invoice list by month."
 
 - [ ] All inputs read; every contradiction resolved in writing before coding
 - [ ] The baseline (build/tests before changes) was checked and its state recorded
+- [ ] Work was decomposed into dependency-ordered work units, executed in order, each with its own passing check; the unit list in `STATUS.md` is complete
 - [ ] Every slice is complete: behavior + test + evidence
 - [ ] Important logic has TDD-written tests; every bug fix has a reproducing test
 - [ ] FE: correct DS/components/tokens, all 5 states, errors handled per contract code

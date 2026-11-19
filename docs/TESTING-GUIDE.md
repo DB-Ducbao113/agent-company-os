@@ -3,7 +3,7 @@
 > This guide is for the repo's owner/user, not for agents. It answers one question:
 > **"How do I know the agent is really following the workflow — and what happens when something fails?"**
 > There are two levels of testing, and you need both:
-> - **Level 1 — Test the OS itself** (once after installing, and after every major edit): run the 10 workflow test cases below against your agent and score them.
+> - **Level 1 — Test the OS itself** (once after installing, and after every major edit): run the 10 workflow test cases below against your agent and score them. These same ten cases are also the OS's formal regression suite — see `docs/EVALS.md` for the rule that a failed case blocks an OS release, and for the results log.
 > - **Level 2 — The workflow's own test gates** (on every real task): the built-in rule that no gate proceeds unless 100% of its test cases pass, and any failure stops the line with a written report.
 
 ---

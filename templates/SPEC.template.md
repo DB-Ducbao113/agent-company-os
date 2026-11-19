@@ -31,3 +31,7 @@
 |---|---|---|---|---|
 | S-01 | … | requirement / constraint / preference / clarify / out-of-scope / conflict | REQ-01 | mapped |
 Coverage result: Segments: [N] · Mapped: [N] · Unmapped: [must be 0]
+## 13. Roadmap (phases — fill in when the work ships in more than one phase; otherwise "Single phase")
+| Phase | Scope | Acceptance milestone |
+|---|---|---|
+| 1 | … | … |

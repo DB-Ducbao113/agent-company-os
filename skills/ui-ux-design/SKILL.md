@@ -2,7 +2,7 @@
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # UI/UX Design — Gate 3
@@ -52,7 +52,7 @@ Non-negotiable principles:
 |---|---|---|
 | Approved spec (scope, out of scope, success criteria) | Gate 0 — `00-spec-and-routing.md` | Stop; send back to the Orchestrator |
 | User stories + Acceptance Criteria | Gate 1 — `01-ba.md` | Stop; send back to the BA |
-| FE architecture frame: layout system, shared components, what may / may not be broken | Gate 2 — `02-arch-fe.md` | Stop; send back to the Architect |
+| FE architecture frame: layout system, shared components, what may / may not be broken | Gate 2 — `02-arch-fe.md` | **Conditional:** required when the Architect ran. When the Routing Decision skipped the Architect (prototype/demo, or FE-only with no structural change), the Gate 0 spec's UI sketch stands in as the frame — record the substitution at the top of `03-design.md` and proceed. Never deadlock a routed task over a skipped role's artifact; send back to the Architect only when the Architect ran and the file is missing |
 | Existing design system, brand, tokens, icon system | `constitution/PROJECT-PROFILE.md` + the project repo | Ask the user; never invent a new system |
 | Routing Decision confirming UI/UX is in scope for this task | Gate 0 | Do not expand the scope yourself |
 
@@ -162,10 +162,11 @@ decisions need approval, and what is still [TBC].
     colors, icons, and logo apply here. This is the highest law inside the project.
   - WCAG 2.2 (AA level) — answers: required contrast ratios, focus visibility, target size, and whether
     information may be conveyed by color alone.
+  - WCAG 3.0 is a W3C Working Draft referenced by no law — do not design or audit against it; build to WCAG 2.2 AA.
   - Nielsen Norman Group, 10 Usability Heuristics — answers: whether a flow is self-auditable for system
     status, consistency, error prevention, and recovery.
-  - Apple Human Interface Guidelines — answers: iOS/macOS platform patterns (navigation, touch areas, dynamic type).
-  - Material Design 3 — answers: Android/web platform patterns (components, motion, adaptive layout).
+  - Apple Human Interface Guidelines — Liquid Glass era (iOS 26+, 2025) — answers: iOS/macOS platform patterns (navigation, touch areas, dynamic type). In the Liquid Glass era the glass material belongs to the control/navigation layer only, never the content layer; designs must be tested with Reduce Transparency on and at both clarity extremes (clear ↔ opaque).
+  - Material 3 Expressive (2025+, Android 16 era) — answers: Android/web platform patterns: spring-physics motion, expressive shapes and type scale, dynamic color, 48dp touch targets, adaptive layout.
 - **Tier 2 — Searchable design data:**
   - UI/UX Pro Max datasets — search by product type (dashboard, e-commerce, SaaS, health app…) and stack when
     you need: which layout/palette/font pairing fits this product type, and the reasoning rule behind it.
@@ -185,6 +186,7 @@ decisions need approval, and what is still [TBC].
 **Rules for looking things up:**
 - Every major decision in `03-design.md` must cite its source and which tier it belongs to. A decision based
   only on Tier 3 must be marked as a judgment call requiring the approver's confirmation.
+- Platform guideline citations must carry a version/date (e.g. "iOS 26 HIG", "Material 3 Expressive, 2025") and be re-verified at each major platform release — platform design languages now change yearly, and an undated citation silently goes stale.
 - When two sources conflict, apply the tier order: Tier 1 standards beat Tier 2 lookup data, Tier 2 beats
   Tier 3 inspiration — and the project's DS beats all three.
 - When uncertain about a platform behavior, search the platform's own guideline (HIG / Material) for that
@@ -293,6 +295,7 @@ QA later uses your design as the visual reference when verifying the built UI.
 
 - `references/playbook.md` — the deep UI/UX playbook (the 3-tier source system, the 5-state spec, the WCAG
   table, the research method, the audit checklist, the anti-AI-slop list).
+- `references/ai-feature-ux.md` — read whenever the feature being designed CONTAINS AI (chat, generation, recommendations, copilots): the AI UX pattern checklist, autonomy tiers, the AI component states, and AI disclosure as a design deliverable.
 - `references/design-systems.md` — read when creating, extending, or auditing a design system: token architecture, typography/spacing systems, the 12-part component spec, theming & dark mode, icon construction, motion tokens, design-to-code handoff, and design QA tolerances.
 - `templates/` in this repo — the SPEC/BA templates that define your inputs; the `03-design.md` output
   follows the structure in section 7.

@@ -1,6 +1,6 @@
 # Security by Application Type — Deep Dive
 
-> Read when: Gate 4 starts and you know what kind of application this is. The playbook gives the method (threat modeling, ASVS, permission matrices); this file gives the per-type threat lists, controls, and mandatory tests.
+> Read when: Gate 4 starts and you know what kind of application this is. The playbook gives the method (threat modeling, ASVS 5.0.0, permission matrices); this file gives the per-type threat lists, controls, and mandatory tests.
 > How to use: take the section(s) matching the app type, merge their controls into `04-security.md`, and copy their tests into the mandatory QA handover list. Most real systems match 2–3 sections — apply all of them.
 
 ## Which sections apply? — Identification table
@@ -15,6 +15,7 @@
 | Users upload files others can download/view | (f) |
 | Live messaging, channels, presence, feeds with push | (g) |
 | Any staff-only console, back office, or ops panel | (h) — even a "temporary" one |
+| Chatbot, RAG, copilot, summarization, or an agent that calls tools/APIs | (i) + whichever data sections match |
 
 ## (a) Classic Web App (server-rendered or SPA + session/token auth)
 
@@ -153,11 +154,48 @@ Controls:
 - Data exports are the exfiltration path: permission-gate them, log them, watermark/notify for large ones.
 - Admin surfaces are excluded from public indexes/routes where possible, but obscurity is a bonus layer, never the control.
 
+Zero-trust minimums (checklist — network location grants nothing):
+- [ ] Phishing-resistant MFA (WebAuthn/passkeys or hardware keys) required for admin access — not SMS/app codes alone
+- [ ] SSO for every admin/internal tool; authorization is least-privilege, role-scoped, and enforced per request — being "inside the network" is never itself a permission
+- [ ] Access tokens for admin tooling are short-lived and scoped to the tool and role; no standing broad-access tokens
+- [ ] No shared admin accounts — every privileged action traces to a person (see audit log above)
+- [ ] No long-lived credentials for CI pipelines or AI agents: use workload identity / OIDC federation issuing short-lived tokens instead of stored cloud keys or PATs
+- [ ] Agent/tool credentials are scoped to exactly the actions that automation performs, and are revocable independently of any human's credentials
+
 Mandatory tests:
 - [ ] Low-privilege staff role attempts a destructive/bulk action → denied AND the attempt is in the audit log
 - [ ] Every privileged action in a scripted session appears in the audit log with actor, object, timestamp
 - [ ] Break-glass account use triggers its alert/logging path
 - [ ] Session of a deactivated employee → access denied everywhere, including existing sessions
+
+## (i) AI / LLM & Agentic Features
+
+Based on the OWASP Top 10 for LLM Applications (2025) and the OWASP Agentic AI threat list (ASI). Apply whenever the product embeds a model: chatbots, RAG over documents, copilots, summarization/generation, or agents that call tools and APIs.
+
+Top threats: prompt injection — direct (user) and **indirect** (instructions hidden in retrieved documents, web pages, emails, or tool results the model reads), sensitive information disclosure (the model regurgitating PII, another user's data, or its own system prompt), excessive agency (an agent with broad tools talked into destructive actions), unbounded consumption (cost/DoS via runaway tokens and loops). Agentic themes on top: goal hijack, tool misuse, identity & privilege abuse, memory/context poisoning, cascading failures across chained agents/tools.
+
+Controls:
+- **Treat model output as untrusted input (LLM05):** model text flows into SQL, HTML, shells, and downstream APIs only after the same validation/encoding as any user input. A model producing a payload is an injection that succeeded.
+- **Instructions and data stay separate (LLM01):** retrieved/connected content is data, never instructions. Content from RAG corpora, web pages, files, and tool results must not be able to override the system instructions or trigger tool calls; strip or sandbox instruction-like content at ingestion where feasible, and never let a retrieved document grant permissions.
+- **Least-privilege tools and agency (LLM06):** each tool an agent can call is scoped to the minimum action and data; read and write tools are separate; **irreversible or high-impact agent actions (payments, deletions, sends, permission changes) require human approval** before execution. The agent acts under its own scoped identity — never under a human's full credentials (ASI identity & privilege abuse).
+- **System prompt is not a secret vault (LLM07):** never place credentials, keys, or genuinely confidential rules in the system prompt; design assuming the prompt can be extracted, so its leakage is embarrassing, not fatal.
+- **Disclosure control (LLM02):** filter/redact PII and other users' data from prompts, context, and logs; retrieval is permission-checked per user *before* content enters the context — the model must never receive data the requesting user may not see.
+- **Vector/embedding safety (LLM08):** vector stores are tenant/permission partitioned (namespace per tenant or per-user filters enforced at query time); remember embeddings can leak source content — protect the store like the data it was built from.
+- **Supply chain (LLM03):** models, adapters, and plugins are dependencies: use trusted providers, pin model versions, record model provenance in the release notes; a silent model-version change is a behavior change — treat it like a dependency upgrade.
+- **Poisoning resistance (LLM04):** control who and what can write to fine-tuning data, feedback loops, retrieval corpora, and agent memory; validate ingested content; memory writes from untrusted interactions are quarantined or reviewed (memory/context poisoning).
+- **Consumption caps (LLM10):** per-user/per-key token and cost budgets, rate limits, maximum agent steps/loop counts, and timeouts — enforced server-side, with alerts on anomalous spend.
+- **Misinformation guardrails (LLM09):** in high-stakes domains, ground answers in retrieved sources with citations, surface uncertainty, and provide a human-review path; never present generated content as verified fact by default.
+- **Failure containment:** chained agents/tools get step limits, per-step output validation, and a kill switch, so one compromised or hallucinating step cannot cascade through the whole workflow.
+
+Mandatory tests:
+- [ ] **Indirect-injection test set:** documents/web content/tool results seeded with hidden instructions ("ignore previous instructions, send data to…") → the model does not follow them, does not exfiltrate, does not call tools on their behalf
+- [ ] Direct prompt-injection / jailbreak attempts → system instructions hold; system prompt and secrets are not disclosed
+- [ ] **Tool-scope escape attempts:** the agent is talked into calling tools outside its scope, exceeding its data permissions, or chaining tools to escalate → denied at the tool layer, not merely refused in prose
+- [ ] Irreversible action requested via a manipulated conversation → blocked pending human approval
+- [ ] **Output-handling fuzzing:** model outputs containing SQL fragments, HTML/script, and shell metacharacters → handled safely by every downstream sink
+- [ ] Cross-user / cross-tenant retrieval: user A's documents never enter user B's context, including via semantic similarity
+- [ ] **Consumption-cap test:** runaway loop / oversized input / repeated expensive calls → caps, step limits, and budgets trigger and cost stays bounded
+- [ ] Memory poisoning: a malicious interaction writes to agent memory/shared context → the poisoned content does not affect other users or later sessions
 
 ## Cross-Type: Secrets & Logging Hygiene (applies to every section above)
 
@@ -174,7 +212,7 @@ Mandatory tests:
 
 ## Depth Calibration — How Far to Go per Type
 
-Use the ASVS-style depth from the playbook, driven by the worst data the system touches:
+Use the ASVS 5.0.0 depth from the playbook, driven by the worst data the system touches:
 
 | System profile | Minimum depth | Notes |
 |---|---|---|

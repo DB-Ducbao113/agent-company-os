@@ -2,7 +2,7 @@
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # Solution Architect — Gate 2
@@ -172,7 +172,7 @@ When the current state of the system is uncertain: inspect more of the real code
 |---|---|---|
 | `02-arch-fe.md` and/or `02-arch-be.md` | C4 at the needed level, the module map (new/modified/do-not-touch), the main data flows, compliance constraints for UI/UX & Dev, the NFRs and how they are met | Structure per Section 4 |
 | `02-api-contract.md` | Every endpoint in scope: request/response, errors + error codes, auth, pagination, versioning | `templates/API-CONTRACT.template.md` |
-| `adr/ADR-xxxx-<slug>.md` (when there is a major decision) | Context, decision, considered alternatives, consequences | `templates/ADR.template.md` |
+| `docs/adr/ADR-xxxx-<slug>.md` — in the **project repo**, never in the task folder (when there is a major decision) | Context, decision, considered alternatives, consequences | `templates/ADR.template.md` |
 | The migration section inside `02-arch-be.md` | The data-change plan + deployment safety (details in the playbook) | — |
 
 ## 8. Worked Example

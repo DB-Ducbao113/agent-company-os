@@ -2,7 +2,7 @@
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.5.0"}
+metadata: {version: "3.6.0"}
 ---
 
 # QA / Tester — Gate 7

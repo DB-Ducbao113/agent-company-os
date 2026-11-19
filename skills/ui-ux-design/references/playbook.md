@@ -10,8 +10,10 @@
 | The project's design system + brand (PROJECT-PROFILE) | Tokens, components, identity colors, icons, logo — the highest law inside the project |
 | WCAG 2.2 (AA level) | Contrast, focus, target size, never conveying information by color alone |
 | Nielsen Norman Group — 10 Usability Heuristics | Self-auditing a flow: visibility of system status, match with the real world, user control, consistency, error prevention, recognition over recall, flexibility, minimalism, understandable error messages, help |
-| Apple Human Interface Guidelines | iOS/macOS platform patterns: navigation, touch areas, dynamic typography |
-| Material Design 3 | Android/web platform patterns: components, motion, adaptive layout |
+| Apple Human Interface Guidelines — Liquid Glass era (iOS 26+, 2025) | iOS/macOS platform patterns: navigation, touch areas, dynamic typography. Glass material belongs to the control/navigation layer only, never the content layer; test with Reduce Transparency on and at both clarity extremes (clear ↔ opaque) |
+| Material 3 Expressive (2025+, Android 16 era) | Android/web platform patterns: spring-physics motion, expressive shapes and type scale, dynamic color, 48dp touch targets, adaptive layout |
+
+**AI disclosure:** whenever a feature interacts with users as AI or generates synthetic content, the disclosure UI (see `references/ai-feature-ux.md`) is a design deliverable — users must be told they are interacting with AI at first interaction, not in a terms-and-conditions line.
 
 ### Tier 2 — Searchable design data
 - **UI/UX Pro Max:** look up by product type (dashboard, e-commerce, SaaS, health app…) and stack.

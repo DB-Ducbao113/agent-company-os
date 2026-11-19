@@ -55,6 +55,8 @@ Flags are debt instruments: cheap to open, expensive to forget.
 | Manual approval | Before production | — | Yes — a named human, per this repo's gate law |
 
 - **Artifact immutability:** the artifact built once from a commit is the artifact that travels staging → production (same binary/image, promoted, never rebuilt per environment). Rebuilding for prod means prod runs code that staging never tested.
+- **SBOM per release:** every release generates a **Software Bill of Materials** (CycloneDX or SPDX format) from the actual build and archives it with the release record. The SBOM diff against the previous release is reviewed as part of the release check: an unexpected new component — especially a new transitive dependency nobody added deliberately — is a finding to explain before deploy, not a curiosity to notice after an incident. The SBOM is also the inventory the mobile-store privacy check (App Privacy / Data Safety vs. actual SDKs) is verified against.
+- **Signing & provenance:** release artifacts are **signed** (keyless signing, e.g. Sigstore cosign, so no long-lived signing keys exist to leak) and ship with build **provenance** — target **SLSA Build Level 2** (signed provenance from a hosted build platform). Generating provenance is only half the control: at deploy time the pipeline **verifies** the signature and provenance of the exact artifact being promoted, and a verification failure blocks the deploy like a failed test. An unsigned or unverifiable artifact is treated as an unknown artifact, however it arrived.
 - **Pipeline speed is a quality feature:** a 45-minute pipeline teaches developers to batch changes and skip runs. Keep the merge-blocking path under ~10 minutes; push slow suites to nightly/pre-release stages (and then actually gate on them there).
 - **Flaky pipeline tests** follow the QA flaky protocol (quarantine with expiry) — a pipeline people habitually re-run is a pipeline that protects nothing.
 
@@ -64,6 +66,12 @@ Flags are debt instruments: cheap to open, expensive to forget.
 - **The 4 golden signals** (per service, dashboarded): **Latency** (p50/p95/p99, successful vs failed separately), **Traffic** (requests/s), **Errors** (rate and count, by class), **Saturation** (CPU/memory/queue depth — how full the system is before it falls over).
 - **Alert quality rules:** an alert must be **actionable** (a human can do something specific), **urgent** (it cannot wait for business hours), and **symptom-based** (users are affected) rather than cause-based (a disk *might* fill next week — that's a ticket). Every alert links its runbook (§7). An alert that fires and is ignored three times is deleted or fixed at the next review — alert fatigue is an outage you schedule for later.
 - **The release connection:** every deploy is annotated on the dashboards. Half of incident diagnosis is "what changed?" — the annotation answers it in one glance.
+
+**SLOs & error budgets — turning the golden signals into commitments:**
+- For each user-facing service, define **1–3 SLOs** — no more; an SLO nobody would page over is decoration. Each SLO states: the **SLI** (a user-experience ratio from the golden signals, e.g. "share of checkouts completing without a 5xx or a timeout"), the **target** (e.g. 99.9%), and the **window** (rolling 30 days is the usual default).
+- **Burn-rate alerting:** alert on how fast the error budget is being consumed, not only on raw error counts — a slow leak that will exhaust the budget in 3 days deserves a page-shaped ticket today; a brief spike that costs 0.1% of the budget does not deserve a 3 a.m. call. Multi-window burn-rate alerts (fast burn → page, slow burn → ticket) are the standard shape.
+- **The error-budget policy (the part with teeth):** while budget remains, feature releases proceed normally. **When the budget is exhausted, feature releases freeze** — only reliability fixes and security patches ship — until the budget recovers. This rule is agreed with the gate approver *before* it first triggers; negotiating it during an outage means it does not exist.
+- The go/no-go checklist (§9) therefore includes the budget's current status: shipping a feature release into an exhausted budget requires the same kind of written, named risk acceptance as any other gate override.
 
 ## 6. Backup & disaster recovery
 
@@ -108,6 +116,7 @@ Run at the release gate; any unchecked box is either fixed or converted into a n
 - [ ] Migrations: reversible, or forward-fix plan written; backup verified restorable (§6 drill is current)
 - [ ] Feature flags: states for launch set deliberately; kill switches for risky features tested (§2)
 - [ ] Dashboards annotated; alerts for the golden signals active; on-call named for the monitoring window
+- [ ] Error budget status checked (§5): budget not exhausted, or the feature release carries a written, named risk acceptance
 - [ ] Comms ready: release notes for users/support, status-page draft if the change is user-visible
 - [ ] Calendar check: no freeze window, no colliding business event, approver and fixer available for the window (§8)
 
