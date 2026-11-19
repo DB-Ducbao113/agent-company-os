@@ -3,6 +3,10 @@
 All notable changes to this project are documented here.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [3.3.0] — 2026-11-19
+### Added
+- `chat/CHATGPT-SETUP.md` — how to "install" the OS on ChatGPT web: Route A via a ChatGPT Project (instructions + FULL-CONTEXT.md as a project file), Route B via a Custom GPT, with a ready-to-paste Bootstrap Instructions text (under the GPT instructions character limit) and honest platform limits.
+
 ## [3.2.0] — 2026-11-19
 ### Added
 - **Gate Test Cases starter set in every skill** (TC-00…TC-08, 8 cases per gate): each role now ships concrete, verifiable test cases — derived from its own checklist — with verification method and required PASS evidence, operationalizing the Test-Case Gate law.

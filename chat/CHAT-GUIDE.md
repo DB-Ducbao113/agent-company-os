@@ -1,5 +1,8 @@
 # CHAT GUIDE — Using Agent Company OS on a chat AI (no coding agent needed)
 
+> On **ChatGPT web** specifically, see `CHATGPT-SETUP.md` in this folder: it turns the system into a persistent
+> ChatGPT Project or Custom GPT (fixed instructions + the FULL-CONTEXT file), so you never re-attach anything.
+
 ## Why a separate chat mode?
 A coding agent (Claude Code, Codex, Cursor…) reads the repo from disk and loads skills automatically when a task matches.
 A chat AI cannot: it only knows what you bring into the conversation. So on chat, **you** act as the skill loader: bring the right file in, at the right time. This repo supports three levels:
