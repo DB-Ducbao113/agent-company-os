@@ -3,6 +3,11 @@
 All notable changes to this project are documented here.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [3.4.0] — 2026-11-19
+### Added
+- **A second deep-dive playbook for every role** (in each skill's `references/`): Orchestrator → elicitation deep dive (5 Whys, laddering, NFR catalog, vague-word translation table); BA → domain modeling (data dictionary, decision tables, WSJF/Kano, AC quality rubric); Architect → architecture patterns catalog (use/avoid/cost, sync-vs-async, multi-tenancy, tech-selection matrix); UI/UX → design systems (3-layer tokens, type scale, 12-part component spec anatomy, theming, icon construction, design QA); Security → security by application type (web, API, mobile, multi-tenant SaaS, payments, file-upload, realtime, admin tools — threats, controls, mandatory tests per type); Developer → engineering craft; Code Review → review checklists by change type + comment bank; Integration → third-party integration field guide (OAuth, webhooks, payments, failure modes); QA → test design deep dive (risk-based testing, charter library, flaky protocol, regression selection); Release → release engineering (deployment strategies, flags, observability, DR, incident runbooks).
+- The FULL-CONTEXT build script now concatenates every file in each skill's `references/` folder.
+
 ## [3.3.0] — 2026-11-19
 ### Added
 - `chat/CHATGPT-SETUP.md` — how to "install" the OS on ChatGPT web: Route A via a ChatGPT Project (instructions + FULL-CONTEXT.md as a project file), Route B via a Custom GPT, with a ready-to-paste Bootstrap Instructions text (under the GPT instructions character limit) and honest platform limits.

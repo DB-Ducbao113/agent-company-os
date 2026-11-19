@@ -2,7 +2,7 @@
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Solution Architect — Gate 2
@@ -248,6 +248,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 12. References
 
 - `references/playbook.md` — C4 guidance per level and when to stop, the ADR writing frame, the API contract rule set (errors/versioning/pagination/idempotency/time), and data modeling & migration safety in detail.
+- `references/architecture-patterns.md` — read when choosing or revisiting system structure: the pattern catalog (monolith → microservices, BFF, event-driven, CQRS-lite) with use/avoid/cost, integration and data patterns, auth architecture options, multi-tenancy models, scalability levers in cost order, the weighted technology-selection matrix, and fitness checks for later gates.
 - `templates/API-CONTRACT.template.md` — the official contract structure.
 - `templates/ADR.template.md` — the official ADR structure.
 - `templates/BA.template.md` / the task's `01-ba.md` — the business input, for traceability cross-checks.

@@ -270,7 +270,7 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 name: business-analyst
 description: Turn an approved Gate 0 spec into precise, testable business requirements. Use for requirements analysis, product briefs, PRDs, user stories, acceptance criteria, business rules, state models, permission matrices, and prioritization — whenever business logic is ambiguous, multi-actor, stateful, or involves money, quotas, approvals, or workflows. Follows BABOK v3, ISO 29148, INVEST, MoSCoW, and Given/When/Then (BDD/Gherkin). Produces 01-ba.md that QA can test line-by-line. Never chooses technology, architecture, UI layout, or database design. Keywords: BA, requirements, user story, acceptance criteria, PRD, business rules, use case, state machine, MoSCoW.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Business Analyst — Gate 1
@@ -513,6 +513,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 12. References
 
 - `references/playbook.md` — the detailed INVEST checklist, the Given/When/Then pattern library (happy/boundary/error/permission/state), how to build a state model, MoSCoW criteria, and the requirement-smell list with fixes.
+- `references/domain-modeling.md` — read when the domain has rich data, combinatorial rules, multi-actor processes, or contested priorities: data dictionaries, decision tables, text process modeling with swimlanes, advanced state machines (guards, entry/exit actions, forbidden-transition tests), MoSCoW failure modes + Kano + WSJF, and the acceptance-criteria quality rubric with scored rewrites.
 - `templates/BA.template.md` — the official `01-ba.md` structure.
 - `templates/SPEC.template.md` — the input spec format, for REQ traceability cross-checks.
 - Method foundations: BABOK v3, ISO/IEC/IEEE 29148.
@@ -520,7 +521,164 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/business-analyst/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/business-analyst/references/domain-modeling.md =====
+
+# Domain Modeling Deep Dive — Data, Rules, Processes, States
+
+> Companion to `references/playbook.md` (INVEST, the G/W/T pattern library, state-model basics, MoSCoW).
+> This file goes deeper: the four models a BA maintains (data, rules, process, state) and how to keep them
+> mutually consistent — plus prioritization beyond MoSCoW and a rubric for acceptance-criteria quality.
+
+## 1. The data dictionary
+
+Stories talk about "the customer" and "the order"; systems store fields. The data dictionary is where the BA pins down every business-significant field **before** the Architect designs tables — it records business meaning, not storage types.
+
+One row per field:
+
+| Column | What to write | Example |
+|---|---|---|
+| Field | business name, from the glossary | `order.total` |
+| Meaning | one sentence, no synonyms | "Amount the customer must pay, including tax, excluding delivery." |
+| Type (business) | money / count / text / date-time / enum / flag — not SQL types | money |
+| Source of truth | who or what system creates it and may change it | computed by the pricing rule BR-07; never typed by a user |
+| Validation | format, range, required-when | > 0; required once the order is PLACED |
+| Lifecycle | created when, changes when, retired/archived when | created at checkout; frozen after PAID; kept 7 years |
+| Sensitivity | public / internal / personal / financial / secret | financial |
+
+Working rules:
+- **One field, one meaning.** If two screens use "status" differently, they are two fields — name them apart (`order.status`, `payment.status`) before the confusion reaches a database.
+- **Derived fields name their rule.** Anything computed cites the business rule that computes it; if no rule exists yet, writing the dictionary just exposed a missing rule — log it.
+- **"Source of truth" settles arguments.** When two systems disagree about a value, the dictionary already says which one wins; integration defects often trace to a field whose source of truth was never declared.
+- Fields nobody can fill in (no source, no owner) are deleted from scope, not carried as decoration.
+
+## 2. Business-rule catalogs and decision tables
+
+Keep rules in one catalog, numbered BR-xx, each with: statement (one sentence, testable), source (who/what document decreed it), applies-to (stories/fields), and exceptions. When a rule's outcome depends on **combinations** of conditions, prose hides gaps — switch to a decision table.
+
+**Worked decision table** — rule: "What discount applies to an order?" Conditions: member tier (Gold / Silver / none), order value (≥ 500 / < 500), coupon present (Y/N). Actions: discount %.
+
+| Rule | Tier | Value ≥ 500 | Coupon | Discount | Note |
+|---|---|---|---|---|---|
+| R1 | Gold | Y | Y | 15% | coupon does not stack beyond cap |
+| R2 | Gold | Y | N | 10% | |
+| R3 | Gold | N | Y | 10% | |
+| R4 | Gold | N | N | 5% | |
+| R5 | Silver | Y | Y | 10% | |
+| R6 | Silver | Y | N | 5% | |
+| R7 | Silver | N | Y | 5% | |
+| R8 | Silver | N | N | 0% | |
+| R9 | none | Y | Y | 5% | coupon only |
+| R10 | none | Y | N | 0% | |
+| R11 | none | N | Y | 5% | coupon only |
+| R12 | none | N | N | 0% | |
+
+How the table earns its keep:
+- **Completeness is checkable:** 3 conditions → 3×2×2 = 12 combinations; 12 rows present. A missing row is a question nobody asked (what *should* a non-member with a coupon and a small order get? — R11 forced that answer into existence).
+- **Contradictions are visible:** two rows with identical conditions but different actions cannot hide in a table the way they hide in paragraphs.
+- **QA converts rows to test cases 1:1** — each row is one case with the row's values as test data. If a row cannot be tested, the rule is not finished.
+- Collapse rows only when the differing condition provably never changes the action, and note the collapse ("tier Silver/none behave identically when value < 500 and no coupon → merged").
+
+## 3. Process modeling in text
+
+Diagrams are optional; an unambiguous text process is not. Model per process:
+- **Trigger** (what starts it), **actors** (roles, from the glossary), **precondition** (what must already be true), **happy path** (numbered steps), **exception flows** (numbered E1, E2… attached to the step they branch from), **end states** (success and each failure end), **postconditions**.
+
+Use swimlane-by-actor notation in plain text — one block per actor, steps in order, handoffs marked:
+
+```
+[Customer]  1. Submits checkout → hands order to [System]
+[System]    2. Validates stock. E1: item out of stock → notify [Customer], remove item, back to step 1.
+[System]    3. Reserves stock (15 min) → requests payment from [Payment provider]
+[Provider]  4. Confirms or declines. E2: declined → [System] releases reservation, notifies [Customer]; end: FAILED.
+[System]    5. Marks order PLACED → notifies [Warehouse]
+[Warehouse] 6. Picks and packs → marks READY; end: FULFILLED-ready.
+```
+
+Rules: every exception flow states where it **resumes** or that it **ends** the process; every handoff names the information that crosses (not "sends the data" — which fields, per the data dictionary); any step an actor performs "in their head" (judgment, approval) names its criteria or cites the decision table it uses. A process step nobody owns is a defect in the model, not a detail.
+
+## 4. State machines — advanced
+
+Beyond the basics in the playbook (states, events, allowed transitions), model these four things:
+- **Guards** — conditions on a transition beyond the event: `PLACED → PAID [payment confirmed AND amount = order.total]`. A transition without its guard written is an argument waiting to happen between BA, Dev, and QA.
+- **Entry/exit actions** — what must happen on entering or leaving a state: entering PAID → "issue invoice, notify warehouse"; leaving RESERVED by timeout → "release stock". Actions belong to the state, not to whichever transition happened to trigger them.
+- **Terminal vs. resting states** — mark which states are final (nothing leaves) and which are resting (work pauses but can resume). Reports and timeouts treat them differently.
+- **Forbidden transitions as tests** — the playbook's cross-check becomes a test list: for every state pair NOT in the table, QA gets one negative case ("from CANCELLED, event pay → rejected, state unchanged"). The forbidden list is usually longer than the allowed list, and it is where data-corruption bugs live.
+
+Also decide explicitly: can an object be in this lifecycle twice (re-opened orders)? Is history preserved (audit of transitions with actor + timestamp) — if any stakeholder will ever ask "who cancelled this and when", the answer is yes, and it belongs in the requirements now, not as a later patch.
+
+## 5. Prioritization — beyond MoSCoW
+
+**MoSCoW failure modes** (watch for all four):
+- *Must inflation:* everything is Must because nobody wants to say no. Counter: cap Must at ~60% of estimated capacity; force-rank within Must — the bottom Must is the first Won't if estimates grow.
+- *Won't amnesia:* Won'ts are forgotten and creep back as "quick favors". Counter: Won'ts are listed in the spec's Out of Scope with reasons, and re-adding one requires a new routing decision.
+- *Should/Could blur:* the two middle buckets merge into "later, maybe". Counter: every Should names the cost of deferring it; a Should with no deferral cost is a Could.
+- *Static buckets:* priorities never revisited after new information. Counter: re-run MoSCoW at every scope change, and record what moved and why.
+
+**Kano basics** — classify each feature by asking how users feel with it vs. without it: **Basic** (absence angers, presence unnoticed — correctness, security), **Performance** (more is linearly better — speed, capacity), **Delighter** (presence pleases, absence unnoticed — the thoughtful extra), **Indifferent**, **Reverse** (some users actively dislike it). Use Kano to protect Basics from being traded away for Delighters in a crunch — the classic prioritization error.
+
+**WSJF (Weighted Shortest Job First)** — for sequencing within a release: `WSJF = Cost of Delay ÷ Job Size`. Cost of Delay ≈ user/business value + time criticality + risk reduction, each scored 1–10 (Fibonacci-ish scales are fine; the discipline matters more than precision).
+
+Worked example (size in rough days):
+| Item | Value | Time crit. | Risk red. | CoD | Size | WSJF | Order |
+|---|---|---|---|---|---|---|---|
+| Fix double-charge bug | 10 | 10 | 8 | 28 | 2 | **14.0** | 1 |
+| Add coupon support | 8 | 5 | 2 | 15 | 5 | 3.0 | 3 |
+| New onboarding flow | 6 | 3 | 3 | 12 | 3 | 4.0 | 2 |
+| Admin export | 4 | 2 | 1 | 7 | 4 | 1.75 | 4 |
+
+The small, urgent, risk-reducing fix wins by a wide margin; the big feature waits despite its higher raw value. Show the arithmetic in the artifact — a ranking without visible scores is an opinion, and stakeholders will treat it as one.
+
+## 6. Acceptance-criteria quality rubric
+
+Score every AC 0–2 on five dimensions (0 = absent/wrong, 1 = partial, 2 = solid). An AC scoring < 8/10 goes back for rework before the gate passes; the pattern library in the playbook supplies the shapes, this rubric supplies the standard.
+
+| Dimension | 0 | 1 | 2 |
+|---|---|---|---|
+| **Observable** | describes internals or intentions ("system processes quickly") | partly observable | an outsider can watch it happen or measure it |
+| **Unambiguous** | two readers build two different things | one term undefined | every term from the glossary/data dictionary; one reading only |
+| **Valued outcome** | checks mechanics only ("button exists") | outcome implied | the Then states the business-visible result |
+| **Bounded** | no quantities, limits, or edge stated | some numbers present | thresholds/boundaries explicit (amounts, times, counts) |
+| **Independently testable** | needs another AC or production data to check | testable with setup help | QA can execute it as written, with stated data |
+
+**Scored example — bad AC, rewritten step by step.**
+Original: *"Given a user checks out, when they pay, then the order is processed fast and correctly."*
+Scores: Observable 0 ("processed" is internal), Unambiguous 0 ("fast", "correctly" undefined), Valued outcome 1, Bounded 0, Testable 0 → **1/10**.
+Step 1 — make it observable + bounded: *"…then the order reaches status PLACED within 5 seconds of payment confirmation."* (Observable 2, Bounded 2.)
+Step 2 — remove ambiguity by citing rules: *"…and the charged amount equals order.total as defined by BR-07."* (Unambiguous 2.)
+Step 3 — state the valued outcome + the error sibling AC: *"…the customer sees the confirmation screen with the order number"* plus a paired AC: *"Given payment is declined, when the provider responds, then the order stays CART, stock reservation is released, and the customer sees the decline reason."* Final: **10/10**, and QA can execute both as written.
+
+**Second scored example.** *"Given an admin, when they view the list, then all records are shown."* — Unambiguous 0 ("all" vs. pagination unanswered), Bounded 0. Rewrite forces the missing decision into the open: *"…then the list shows 25 records per page, newest first, with total count and page controls"* — if the stakeholder actually meant "all on one page", the rewrite surfaces the disagreement now, at BA cost, instead of at QA cost.
+
+## 7. Quantities, money, and time — the silent-defect fields
+
+More production defects come from unmodeled quantities than from wrong flows. For every numeric or temporal concept in scope, the dictionary or its rule must state:
+- **Unit and currency** — "amount" is not a field; "amount in VND, minor units, tax-inclusive" is. Mixed-unit interfaces are a named integration risk.
+- **Rounding rule and where it applies** — per line item or per total; half-up, bankers', or truncate; who decided. Two components rounding differently produce the classic one-cent mismatch that no test with round numbers will catch — QA test data must include a rounding-boundary case (e.g. values ending in .005 of the minor unit).
+- **Precision and range** — maximum value the business will ever present; counts that can be zero; quantities that can be negative (refunds, adjustments) vs. those that cannot.
+- **Time semantics** — every timestamp names its zone basis (stored UTC, displayed in whose zone?), every duration names its endpoints ("within 4 hours" — from creation, from confirmation, or from payment?), and every "day" states whether it means calendar day, business day, or rolling 24 hours. Deadline rules get a worked example at the boundary: an order placed at 23:30 with a "cancel within 1 day" rule — show the exact last valid moment.
+- **Ordering and ties** — any "first", "latest", or "top N" rule states its tie-breaker; unspecified tie-breakers become nondeterministic behavior in production.
+
+## 8. Cross-model consistency checks (run before the gate passes)
+
+The four models (dictionary, rules, process, states) must agree with each other, not just be individually plausible. Run this checklist over `01-ba.md` at gate time; every "no" is a defect in the artifact:
+
+| Check | How |
+|---|---|
+| Every field used in a rule exists in the dictionary | grep the rule catalog's field names against dictionary rows |
+| Every computed field cites its rule; every rule's inputs exist | follow each "computed by BR-xx" both directions |
+| Every process step's handoff data exists in the dictionary | check each "hands X to Y" against field rows |
+| Every state in the process model matches the state machine | process end states ⊆ machine states; no orphan states either way |
+| Every guard references a dictionary field or a rule | guards citing undefined terms are rework |
+| Every decision-table combination is reachable in the process | a rule row whose conditions the process can never produce is dead scope — flag it |
+| Every AC traces to a story, a rule, or a state transition | orphan ACs are invented scope; missing coverage is a gap |
+| Permission matrix agrees with process actors | an actor performing a step they are not permitted to perform is a contradiction, not a detail |
+
+Record the check run (date, result per row) at the end of `01-ba.md`. This table is also the fastest way for the Architect and QA to audit the BA artifact during their handoff acceptance — eight checks, each answerable in minutes.
+
+
+---
+
+# ===== SKILL REFERENCE — skills/business-analyst/references/playbook.md =====
 
 # Playbook — Business Analyst (deep reference)
 
@@ -640,7 +798,7 @@ Rule: the total effort of Must items should be ≤ ~60% of the round's capacity;
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)
@@ -910,6 +1068,7 @@ and fixes it for re-review.
 
 - `references/playbook.md` — the deep playbook: the detailed Google review order, the severity label
   scale, the security-sensitive pattern list, good vs bad comment examples.
+- `references/review-by-change-type.md` — read for every diff, after identifying its change type(s): checklists and classic defects for DB migrations, API contract changes, auth/permission changes, UI changes, dependency upgrades, config changes, deletions/refactors, and hotfixes, plus a 10-comment bank and a severity calibration table.
 - Google Engineering Practices — The Standard of Code Review, and its guidance on review speed and
   comments (the origin of the order and the labels).
 - `templates/` in this repo — the artifact templates used as references when reviewing.
@@ -917,7 +1076,7 @@ and fixes it for re-review.
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/code-review/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/code-review/references/playbook.md =====
 
 # Code Review Playbook — Deep Reference
 
@@ -1036,13 +1195,174 @@ consequence, the author cannot judge importance; without the suggestion, the fix
 
 ---
 
+# ===== SKILL REFERENCE — skills/code-review/references/review-by-change-type.md =====
+
+# Review by Change Type — Deep Dive
+
+> Read when: a diff arrives. Identify its type(s) below, then run those checklists on top of the general review order in `playbook.md`.
+> A diff often has several types at once (a migration + an API change + a config change). Apply every matching section.
+
+## Identify the change type(s) first
+
+| Signal in the diff | Section |
+|---|---|
+| Files under a migrations folder, DDL, model/schema definitions | (a) |
+| Endpoint signatures, request/response shapes, DTOs, API version folders | (b) |
+| Middleware/guards, role checks, token/session logic, permission tables | (c) |
+| Components, styles, tokens, layout, copy in UI files | (d) |
+| Lockfile churn, package manifest version changes | (e) |
+| `.env` examples, CI/workflow files, feature flags, infra config | (f) |
+| Large deletions, moved files, "cleanup" in the description | (g) |
+| Branch named hotfix, incident referenced, unusually small diff under time pressure | (h) — plus every other matching section, compressed |
+
+## (a) DB Migration / Schema Change
+
+Scrutinize:
+- [ ] Reversibility: is there a working down-migration, or an explicit, approved "irreversible — backup taken at [time]" note?
+- [ ] Data safety on EXISTING rows: new NOT NULL column without a default/backfill breaks or corrupts production data — the local empty-DB test proves nothing
+- [ ] Lock behavior: does it rewrite/lock a large table during deploy? Is there a batched/backfill-offline plan?
+- [ ] Expand–contract discipline: additive change first (new column/table), deploy code that tolerates both, backfill, then remove the old — in separate releases for anything risky
+- [ ] Constraint intent: unique/FK/check constraints match the business rules in the BA artifact, not just the developer's model of them
+- [ ] Index impact: new query patterns have indexes; dropped indexes are proven unused
+
+Classic defects: migration that passes on an empty dev DB and fails on production data; a rename done as drop+add (data silently destroyed); backfill inside the migration transaction timing out; two migrations with the same version/timestamp from parallel branches.
+
+## (b) API Contract Change
+
+Scrutinize:
+- [ ] Backward compatibility: every change classified — additive (new optional field/endpoint = compatible) vs. breaking (removed/renamed field, type change, new required field, changed error code/status, tightened validation)
+- [ ] Breaking changes have a versioning/deprecation story and named consumers who agreed — "the frontend is ours too" still counts: old app versions in the wild consume this API
+- [ ] The contract artifact (`02-api-contract.md`) was updated in the same change, or the diff and the contract now disagree
+- [ ] Error format consistency: new endpoints return the shared error shape and stable codes
+- [ ] Pagination, filtering, and idempotency conventions followed, not reinvented per endpoint
+
+Classic defects: renaming a response field the mobile app already reads; changing a field's type (`"5"` → `5`) that strict clients reject; an error that used to be 404 becoming 403 and breaking client handling; a "small" validation tightening that rejects data existing clients legitimately send.
+
+## (c) Auth / Permission Change
+
+Scrutinize — this is the highest-blast-radius change type; slow down:
+- [ ] The permission matrix (Gate 4 artifact) is updated and the diff implements exactly it — no extra grants "for convenience"
+- [ ] Enforcement is server-side on every affected endpoint, including the boring ones (exports, history, search) — not only the endpoint named in the task
+- [ ] Default is deny: new roles/permissions start with nothing and gain explicitly
+- [ ] Negative cases are tested: the diff includes (or QA has) tests for the FORBIDDEN paths, not only the allowed ones
+- [ ] Token/session implications handled: does a permission change take effect for already-issued sessions, and is that the intended behavior?
+- [ ] Audit logging covers grants, denials of sensitive actions, and privilege changes
+
+Classic defects: check added to the UI but not the API; admin check that trusts a client-sent role flag; permission added to the list endpoint but not the detail/export endpoints; tests that prove the allowed user succeeds and never prove the forbidden user fails.
+
+## (d) UI / Visual Change
+
+Scrutinize:
+- [ ] Conformance to the design artifact: tokens (not raw hex/px), type scale, spacing — near-miss values are wrong values
+- [ ] All states present: hover, focus-visible, disabled, loading, empty, error — not only the default state in the screenshot
+- [ ] Accessibility: semantic elements, labels on icon-only controls, focus order sane, contrast in every state, touch targets sized per spec
+- [ ] Numbers/labels use the right formatting (tabular figures where columns align, real data — never placeholder/fake data shipped as content)
+- [ ] Responsive behavior at each range in the spec, checked at boundary ±1px
+- [ ] No auto-detectable choice pushed onto the user (a manual toggle for something the app already detects is a design defect — flag it)
+
+Classic defects: focus state removed because it "looked noisy"; loading state forgotten until the network is slow; error state styled but unreachable because errors are swallowed; a pixel-matched desktop view with a broken compact layout nobody opened.
+
+## (e) Dependency Upgrade
+
+Scrutinize:
+- [ ] The changelog of the dependency was actually read: breaking changes, deprecations, and security fixes identified — "bump version" is not a review
+- [ ] Scope discipline: one dependency (or one related family) per change; a diff that upgrades 14 packages hides which one broke things
+- [ ] Lockfile changes are sane and included; no phantom upgrades of unrelated packages
+- [ ] License and maintenance sanity for NEW dependencies: maintained? license compatible? could the standard library/existing deps already do this?
+- [ ] Tests/build pass, and the risky surface the dependency touches was exercised (an auth library bump with only a build check is not verified)
+
+Classic defects: major-version bump merged on a green build that fails at runtime; a new dependency duplicating an existing one; transitive dependency quietly changing behavior (date parsing, crypto defaults); abandonware added because it ranked first in search.
+
+## (f) Config / Environment Change
+
+Scrutinize:
+- [ ] Which environments does this touch — dev only, or staging/production too? The diff must say, and prod changes get the same review weight as code
+- [ ] No secrets in the diff (keys, tokens, passwords, connection strings) — a committed secret is an incident, not a comment thread
+- [ ] Defaults are safe: if the new variable is missing in an environment, does the system fail closed or silently run in a degraded/insecure mode?
+- [ ] Feature-flag changes state the rollout/rollback intent and the flag's owner + removal plan
+- [ ] Region/timezone/locale assumptions made explicit (config that is correct in one region and wrong in another is a classic silent defect)
+
+Classic defects: debug/verbose mode enabled in production config; a staging endpoint URL shipped in the prod config; timeout raised 100× to "fix" flakiness, masking the real bug; flag turned on for everyone at once with no rollback path rehearsed.
+
+## (g) Deletion / Refactor
+
+Scrutinize:
+- [ ] **Dead-code proof:** for every deleted function/route/component — a search showing zero callers/references, including dynamic references (routes, config, templates, string-based lookups) that text search can miss
+- [ ] Behavior preservation: characterization tests existed or were added before the refactor (see the Developer craft rules); the diff changes structure, not behavior — any behavior change hiding inside is split out and labeled
+- [ ] No public surface removed silently: deleted endpoints/exports/events are breaking changes and follow section (b)'s rules
+- [ ] Database/data touchpoints: deleted code that was the only writer/reader of a table or field is called out, with the data's fate decided explicitly
+
+Classic defects: "unused" code that was invoked by a cron job, a webhook, or reflection; refactor that also "fixes" an undocumented quirk another feature depended on; deletion of the fallback path that production still needed twice a year.
+
+## (h) Hotfix Under Time Pressure
+
+The pressure is real; the review shrinks but never disappears.
+
+May be deferred (recorded as follow-up tasks with owners):
+- Refactoring for elegance, broader test coverage beyond the fixed path, documentation polish, non-critical performance tuning
+
+May NEVER be deferred:
+- A reproducing test (or at minimum a documented manual repro) for the bug being fixed
+- The security check if the hotfix touches auth, permissions, money, or user data — pressure is exactly when these get broken
+- A rollback path: how to undo this hotfix in minutes if it makes things worse
+- Scope control: the diff fixes the incident and nothing else — no "while I'm here" changes riding along
+- A second pair of eyes: hotfix review can be 10 minutes, but maker ≠ checker still applies
+
+Classic defects: hotfix that fixes the symptom for one user cohort and breaks another (no regression check on adjacent paths); config hotfix applied to production by hand and never committed, so the next deploy resurrects the bug; the follow-up tasks never created, so "temporary" becomes permanent.
+
+## Comment Bank — 10 Example Comments (label → location → consequence → suggestion)
+
+1. **[BLOCKER]** `migration 0042, line 18` — Adding `NOT NULL` without a default will fail on the production table, which already has ~40k rows. → Add the column nullable, backfill, then set the constraint in a follow-up migration.
+2. **[BLOCKER]** `POST /appointments, handler` — There is no ownership check before the update; any authenticated user can modify another user's appointment by ID (BOLA). → Enforce the Gate 4 permission check server-side and add the forbidden-path test.
+3. **[BLOCKER]** `config/prod.yaml` — This diff contains a live-looking API secret. → Remove it, rotate the secret now (history keeps it), and load it from the environment instead.
+4. **[SHOULD FIX]** `BookingList.tsx, render loop` — This issues one request per row (N+1); the page will degrade linearly as bookings grow. → Batch the fetch or include the relation in the list query.
+5. **[SHOULD FIX]** `payment service, webhook handler` — The handler trusts the browser redirect to mark orders paid; a forged return marks unpaid orders as paid. → Treat only the signature-verified webhook as truth, per the security artifact.
+6. **[SHOULD FIX]** `Button component` — The focus-visible state from the design spec is missing; keyboard users get no visible focus. → Restore the spec's focus token/styles before merge.
+7. **[SHOULD FIX]** `user serializer` — The response now includes `internal_flags`, which the contract does not list and clients do not need. → Shape the response to the contract's field list.
+8. **[NIT]** `utils/date.ts` — `fmt` is used in three files with three meanings. → Rename to `formatSessionTime` for the next reader.
+9. **[NIT]** `test file` — This test's name says "rejects expired code" but it asserts the happy path. → Align the name with the assertion so failures are readable at 2 a.m.
+10. **[QUESTION]** `session timeout change 24h → 30d` — This lengthens the session far beyond the Gate 4 decision; was that intentional and approved there? → If yes, link the updated security artifact; if not, revert to the agreed value.
+
+## Severity Calibration
+
+| Label | Meaning | Merge rule | Calibrating examples |
+|---|---|---|---|
+| **[BLOCKER]** | Will break production, lose/corrupt data, open a security hole, or violate the spec/contract | Must be fixed and re-reviewed before merge — no exceptions, including hotfixes | Unowned-object access allowed; migration destroys data; secret committed; contract field renamed silently |
+| **[SHOULD FIX]** | Real defect or risk that will hurt soon: correctness edge case, missing required state, performance trap, missing negative test | Fix before merge, or merge only with a tracked follow-up + owner + reviewer agreement recorded | N+1 on a growing list; missing error state; forbidden-path test absent; response oversharing fields |
+| **[NIT]** | Style, naming, readability — no behavioral impact | Author's choice; never blocks; keep them few and kind | Misleading variable name; test name/assertion mismatch; comment drift |
+| **[QUESTION]** | Reviewer cannot tell intent from the diff | Blocks until answered — an unanswered question is an unreviewed area | Unexplained behavior change; config value changed with no reason; deleted fallback with no context |
+
+Calibration rules:
+- Severity is about **consequence if merged**, not about how wrong the author was. A one-line diff can be a BLOCKER; a 500-line diff can be all NITs.
+- If everything is a BLOCKER, nothing is — inflating severity trains authors to ignore the label. Reserve it.
+- A [QUESTION] that reveals a defect gets re-labeled to its real severity once answered.
+- Disagreement on severity is resolved by evidence (reproduce it, measure it, cite the spec/contract line), not by seniority or stubbornness.
+
+## Review Effort Calibration — How Deep to Go
+
+Review depth scales with blast radius, not with diff size:
+
+| Change profile | Minimum review depth |
+|---|---|
+| Copy/text, styling tokens, test-only changes | Fast pass: correctness of the text/values, no behavior change hiding inside |
+| Standard feature code within one module | Full general order (playbook) + its change-type sections |
+| Auth/permissions, money, migrations, config for production, public API surface | Deep pass: re-derive behavior from the artifacts, run or inspect the negative-path tests yourself, check every endpoint/object the change class touches — not only the ones in the diff |
+| Hotfix | Compressed but complete on the never-defer list (section h); schedule the deferred remainder as a named follow-up review |
+
+Two closing rules:
+- **A review that found nothing is a valid outcome only if the review actually happened.** "LGTM" on a deep-pass change without evidence of the checks (tests run, artifacts compared) is an unverified claim — the verdict file should show what was examined.
+- **Review the change that IS, not the change you wish it were.** Redesign suggestions beyond the task's scope go in as [QUESTION]/follow-up proposals, not as merge conditions — scope discipline protects the author's gate as much as rigor protects the product.
+
+
+---
+
 # ===== SKILL — skills/developer/SKILL.md =====
 
 ---
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Developer (FE / BE) — Gate 5
@@ -1314,13 +1634,174 @@ yourself. After approval, Integration (Gate 6) receives the work together with y
 
 - `references/playbook.md` — the deep playbook: the detailed TDD cycle, vertical slicing, FE/BE
   checklists, evidence standards, stop & escalate criteria.
+- `references/engineering-craft.md` — read when structuring, debugging, or refactoring inside Gate 5: code structure and dependency direction, error-handling and validation layering, the dev-side testing pyramid, the safe refactoring protocol, the 6-step debugging method with a worked example, performance hygiene, and git discipline.
 - `templates/API-CONTRACT.template.md`, `templates/SECURITY.template.md` — the frames of the inputs you must obey.
 - `workflow/MASTER-WORKFLOW.md` — Gate 5's position and the common gate rules.
 
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/developer/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/developer/references/engineering-craft.md =====
+
+# Engineering Craft — Deep Dive
+
+> Read when: you are structuring, debugging, refactoring, or reviewing your own implementation choices inside Gate 5.
+> Companion: `playbook.md` covers the TDD cycle, slicing, and evidence standards; this file covers the craft underneath them.
+
+## 1. Structuring Code
+
+Two organizing schemes; pick per codebase and be consistent:
+
+| Scheme | Shape | Fits | Failure mode |
+|---|---|---|---|
+| By layer | `controllers/`, `services/`, `models/` | Small apps, frameworks that enforce it, teams fluent in the stack | A feature change touches 6 folders; related code is scattered |
+| By feature | `features/billing/`, `features/booking/` (each with its own UI/API/data) | Growing products, multiple devs/agents, clear ownership | Shared utilities get duplicated per feature if extraction is lazy |
+
+Rules that hold in both:
+- **Dependency direction points inward/downward:** UI depends on domain logic; domain logic depends on nothing framework-specific; data access is at the edges. A business rule that imports an HTTP request object is a rule you cannot test or reuse.
+- **No circular dependencies.** If A imports B and B needs A, the boundary is drawn wrong — extract the shared piece or invert with an interface/event.
+- **A module's public surface is small and named.** Everything not exported is private by default. "Import anything from anywhere" is how codebases become unchangeable.
+- **Shared code is earned:** extract on the third genuine use (rule of three), not the first imagined one — premature shared abstractions couple features that should evolve separately.
+- New code goes where a reader would look for it, following the existing structure — even if you'd structure it differently greenfield. Local consistency beats imported elegance.
+
+## 2. Error Handling Patterns
+
+- **Typed errors, not strings.** Errors carry a category (validation / not-found / permission / conflict / upstream / internal) plus a stable code. Callers branch on category, never on message text.
+- **Fail at the right layer:** domain code signals errors (returns/throws typed errors); the boundary layer (HTTP handler, UI) translates them into responses/messages. A domain function that returns an HTTP status has leaked the boundary inward.
+- **Error boundaries in UI:** a failing widget/section shows its own fallback; one broken panel must not white-screen the page. Log the error with context, show the user something honest and recoverable.
+- **Never swallow.** An empty catch / ignored error return is a defect even if "it works" — at minimum log with context; usually propagate or convert to a typed error. Silent failure today is an undebuggable incident later.
+- **Retry with backoff + jitter, only where safe:** retries are for idempotent operations or operations carrying an idempotency key. Retrying a non-idempotent POST (payment, order create) without a key manufactures duplicates. Cap attempts, cap total time, and log each retry.
+- **Timeouts everywhere a network is involved.** A call without a timeout is a hang waiting for its moment; set connect + total timeouts deliberately.
+- **User-facing messages** are written for the user (what happened, what they can do), mapped from the error code at the boundary — never raw exception text, never stack traces.
+
+| Situation | Pattern |
+|---|---|
+| Expected failure (bad input, not found) | Typed error → boundary maps to 4xx + user message |
+| Upstream flaky, operation idempotent | Retry ≤3, exponential backoff + jitter, then typed upstream error |
+| Upstream flaky, operation NOT idempotent | No blind retry; idempotency key or fail + surface for user retry |
+| Bug (invariant broken) | Fail fast, log loudly with context; do not "recover" into a corrupt state |
+| Partial failure in a batch | Report per-item results; never report total success |
+
+## 3. Input Validation Layering
+
+| Layer | Responsibility | Examples |
+|---|---|---|
+| Client (UX validation) | Fast feedback, format hints, preventing obviously-wrong submits | Required-field prompts, format masks, length counters |
+| Server (the actual validation) | ALL rules that matter: types, ranges, enums, ownership, business invariants | Reject negative quantities, foreign object IDs, illegal state transitions |
+| Database (last line) | Constraints that must hold even if app code has a bug | Unique constraints, foreign keys, check constraints, NOT NULL |
+
+Rules:
+- **Client validation is a UX feature, never a security/correctness control.** Anything enforced only on the client is unenforced.
+- Server validates every field of every request as if it came from an attacker with curl — because QA and Security will test it exactly that way.
+- Validate types strictly (a string "5" is not the number 5 unless you deliberately coerce), reject unknown fields on sensitive inputs, and return field-level errors the client can display.
+- Business invariants that two requests can race (last seat, last item, double-spend) belong in transactions/DB constraints, not in check-then-act application code.
+
+Validation defects QA/Security find most often (pre-empt them):
+
+| Defect | Example |
+|---|---|
+| Validating presence but not range/shape | `quantity = -3` accepted; a 40,000-character "name" stored |
+| Validating on create but not on update (or vice versa) | The PATCH endpoint accepts what POST rejects |
+| Trusting a client-computed value | Total price, discount, or role taken from the request body |
+| Inconsistent rules between client and server | Client allows what the server rejects, discovered by the user as a dead end |
+| Error responses that leak internals | Raw DB constraint names or stack text returned to the client |
+
+## 4. The Developer's Own Testing Pyramid
+
+Dev writes tests that protect the implementation; QA owns independent verification against acceptance criteria. Both are required; neither replaces the other.
+
+| Level | Dev writes | QA owns |
+|---|---|---|
+| Unit (many, fast) | Business rules, calculations, edge/boundary cases of own functions, state transitions | Reviews coverage of AC-critical rules; adds cases Dev didn't think of |
+| Integration (some) | Own API endpoints vs. contract, DB queries, service-to-service calls in the slice | Cross-feature flows, contract conformance of the assembled system (with Integration role) |
+| E2E (few) | Smoke of the critical path of own slice (it boots, the main flow completes) | Full user journeys traced to AC, negative paths, regression suites |
+
+Rules:
+- A bug fix without a reproducing test is unfinished — the test is the proof and the regression guard (see playbook's TDD cycle).
+- Tests must be deterministic: no dependence on test order, wall-clock time, or live third-party services (fake/stub them at the boundary).
+- Flaky tests are bugs. Quarantine + fix or delete; a suite the team ignores is worse than a smaller suite it trusts.
+- Dev's completion evidence includes the test run output (see playbook) — "tests pass" without the run is an unverified claim.
+
+## 5. Safe Refactoring Protocol
+
+Refactoring = changing structure without changing behavior. The protocol keeps that true:
+
+1. **Characterize first:** if the code lacks tests, write characterization tests that pin down CURRENT behavior (including quirks) before touching anything. You cannot prove "behavior unchanged" against a baseline you never recorded.
+2. **One axis at a time:** don't rename, restructure, and optimize in the same change. Each step should be independently revertible.
+3. **Small steps, green between steps:** run the tests after each micro-change; a red suite mid-refactor means stop and fix that step, not press on.
+4. **No behavior changes smuggled in.** If you spot a bug while refactoring, note it and fix it in a separate change with its own reproducing test — mixing the two makes both unreviewable.
+5. **Refactor toward the task:** clean the area you are already changing (boy-scout rule); a wholesale rewrite of working code needs an ADR-level justification, not enthusiasm.
+
+## 6. Debugging Method
+
+Discipline, in order. Skipping to step 4 is how hours disappear.
+
+1. **Reproduce** — a bug you cannot reproduce on demand is not yet debuggable. Find the minimal input/state that triggers it; record it exactly.
+2. **Minimize** — strip the repro down: smallest data, fewest steps, one variable at a time, until removing anything makes the bug vanish.
+3. **Hypothesize** — write down 1–3 candidate causes, ranked, each with a prediction ("if X, then changing Y removes it").
+4. **Instrument** — test the top hypothesis with the cheapest probe: a log line, a debugger breakpoint, a bisect, a diff between working and broken cases. Change ONE thing per experiment.
+5. **Fix** — fix the root cause, not the symptom; check whether the same cause exists elsewhere (search for the pattern).
+6. **Regression test** — turn the minimal repro into an automated test that fails before the fix and passes after. Then run the surrounding suite.
+
+Worked micro-example:
+> Report: "Users occasionally see another user's name in the greeting after logging in."
+> Reproduce: fails only when two logins happen in quick succession in the same browser session flow. Minimize: two accounts, one shared test browser, login A → logout → login B fast. Hypothesize: (1) cached profile response, (2) session not rotated, (3) greeting renders before profile fetch resolves using stale state. Instrument: network log shows B's profile request returns B's data, but the greeting renders 200ms earlier from a cached A response — hypothesis 1 confirmed, cache key is the endpoint URL without identity. Fix: scope the cache per identity + clear on logout; search finds the same cache used for the avatar (same fix applied). Regression test: automated A→B login sequence asserting the greeting text; fails on the old code, passes on the fix.
+
+Anti-patterns: changing several things and re-testing ("shotgun debugging"), fixing where the error *appears* instead of where it *originates*, and declaring victory after one manual pass without a regression test.
+
+## 7. Performance Hygiene
+
+- **Measure before optimizing.** Profile/timing first; the bottleneck is rarely where intuition says. An optimization without a before/after measurement is a guess wearing a costume.
+- **N+1 detection:** a loop that issues a query/request per item is the most common self-inflicted wound. Signs: query count grows with list size; page slows linearly with data. Fix with batch loading/joins/includes — and verify the query count, not just the feeling.
+- **Pagination by default:** every list endpoint and list UI has a default page size and a cap. "Return everything" is a decision that expires the first time the table grows.
+- **Cache deliberately:** know what is cached, its key (identity-scoped where data is per-user — see the debugging example for the cost of getting this wrong), and its invalidation. A cache without an invalidation story is a stale-data generator.
+- **Don't ship heavy work to the weakest client:** aggregate, filter, and paginate server-side; the low-end device constraint (when the project has one) is an implementation requirement, not a QA finding.
+- Watch payload size, image weight, and synchronous work on request paths; move slow, non-urgent work to background jobs with status the user can see.
+
+Symptom → first probe table:
+
+| Symptom | Likely cause | First probe |
+|---|---|---|
+| List page slows as data grows | N+1 queries, or no pagination | Count queries for 10 vs. 100 rows |
+| One endpoint is slow, others fine | Missing index on the filter column, or an external call in the request path | Query plan + timing breakdown (DB vs. network vs. code) |
+| Everything slow at peak only | Connection/thread pool exhaustion, lock contention | Pool metrics and lock waits at peak, not at idle |
+| Client feels janky on low-end devices | Oversized payloads, unoptimized images, main-thread work | Payload sizes + a low-end device profile run |
+| Memory grows until restart | Unbounded cache/collection, leaked listeners/subscriptions | Heap snapshot diff over time |
+
+## 8. Working in Code You Didn't Write
+
+Most Gate 5 work happens in an existing codebase, not a green field. Rules for foreign territory:
+
+- **Read before writing:** trace the flow you are about to change end-to-end (entry point → domain → data) before editing. The cost of reading is minutes; the cost of a wrong assumption is a defect.
+- **Match the local idiom:** error style, naming, folder layout, test style. If the codebase does it a way you dislike, your task is not the moment to convert it — note it, and propose it separately if it matters.
+- **Respect load-bearing quirks:** odd-looking code often encodes a past incident (a workaround, a race fix, a platform bug). Before "cleaning" it, check git history/comments/linked issues. If the reason is unrecoverable, add characterization tests (Section 5) before touching it.
+- **Leave a map:** when you figure out something non-obvious about the area, the commit message or dev notes should carry it — the next reader may be you, with no memory of today.
+- **Blame is a research tool, not a weapon:** history answers "why is it like this?" — use it for that, never to assign fault in review or notes.
+
+Self-check before handing work to Code Review:
+
+- [ ] The diff contains only this task's changes (no stray formatting sweeps, no unrelated fixes)
+- [ ] Every new behavior has a test; every bug fix has a reproducing test
+- [ ] No debug output, commented-out code, TODO-without-owner, or secrets in the diff
+- [ ] Error paths were exercised, not just happy paths (kill the server, send the bad input, expire the token)
+- [ ] The evidence bundle (build/test output, screenshots where UI changed) is attached per the playbook's standards
+- [ ] Anything you knowingly left imperfect is written in the dev notes as a limitation — surprises belong to no one
+
+## 9. Git Discipline
+
+- **Atomic commits:** one logical change per commit; the commit builds and its tests pass. If you cannot describe the commit in one sentence without "and", split it.
+- **Message format:** imperative subject ≤ ~72 chars saying WHAT and, when non-obvious, WHY in the body. Follow the repo's convention (e.g. Conventional Commits `feat:`, `fix:`, `refactor:`) if it has one.
+  - Good: `fix: scope profile cache per user to stop cross-account greeting leak`
+  - Bad: `fix bug`, `updates`, `wip`
+- **Reviewable diffs:** keep changes as small as the task allows; separate mechanical changes (renames, formatting, moves) from behavioral changes into different commits/PRs — a 2,000-line diff with a 3-line behavior change hides the 3 lines.
+- **Never commit:** secrets, credentials, `.env` files, build artifacts, or commented-out code blocks ("dead code with a tombstone"). Commented code gets deleted; git remembers it.
+- **No history rewriting on shared branches;** no force-push to branches others build on.
+- Committing/pushing happens only under the project's approval rule (see the repo's gate law) — preparing clean commits is Dev's job; deciding they land is the owner's.
+
+
+---
+
+# ===== SKILL REFERENCE — skills/developer/references/playbook.md =====
 
 # Developer Playbook — Deep Reference
 
@@ -1440,7 +1921,7 @@ right, not a failure.
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Integration Engineer — Gate 6
@@ -1809,13 +2290,14 @@ QA will send the work back if:
 - `references/playbook.md` — the method for building the contract verification
   matrix, how to select backbone flows, the Mock Inventory format, environment
   pitfalls, and the detailed deviation-handling procedure.
+- `references/third-party-integrations.md` — read when the other party is an external provider: provider evaluation, OAuth/OIDC, webhooks, payments, failure-mode behavior, sandbox-vs-prod divergence, production monitoring.
 - `templates/API-CONTRACT.template.md` — the contract + Deviation Log template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision question 7).
 
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/integration-engineer/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/integration-engineer/references/playbook.md =====
 
 # Playbook — Integration Engineer (deep reference)
 
@@ -1948,13 +2430,150 @@ the trail when a deviation appears.
 
 ---
 
+# ===== SKILL REFERENCE — skills/integration-engineer/references/third-party-integrations.md =====
+
+# Third-Party Integrations — Field Guide
+
+> Read this when the integration involves an external provider (identity, payments, messaging, maps, file feeds, partner APIs) rather than your own FE↔BE. Your own contract discipline still applies — the provider's API is a contract you did not write and cannot change, so verification shifts from "does it match the contract" to "do we survive the contract as it actually behaves".
+
+## 1. Evaluating a provider BEFORE integrating (score it, don't vibes it)
+
+| Criterion | What to check | Red flag |
+|---|---|---|
+| Docs quality | A working quickstart you can run in <30 min; full endpoint reference; a changelog with dates | Marketing-page "docs"; examples that don't run; no changelog |
+| Sandbox parity | Sandbox mirrors production behavior (same error shapes, same limits semantics); test data generators provided | Sandbox that always succeeds; no way to trigger errors/declines |
+| Versioning policy | Published policy: versioned URLs or headers, deprecation notice period (≥6–12 months is healthy), sunset headers | "We may change the API at any time"; breaking changes announced in a tweet |
+| Status & incidents | Public status page with history; postmortems; measured uptime over 12 months | No status page; history wiped; every incident "resolved" in 5 minutes |
+| Support | Named support channel with an SLA for paid tiers; a human reachable during an outage | Community-forum-only support for a money-critical dependency |
+| Data terms | Where data is processed/stored (region), retention, deletion on contract end, sub-processor list | Vague DPA; data residency unanswerable |
+| Exit cost | Data export in an open format; what breaks if they shut down or triple prices | Your core records exist only inside their system |
+
+**Decision rule:** a provider failing sandbox parity or versioning policy is disqualified for money/auth-critical paths no matter how good the demo is — those two failures are the ones that hurt you at 2 a.m. six months later. Record the evaluation in the integration artifact; "we picked the famous one" is not an evaluation.
+
+## 2. OAuth / OIDC integration checklist
+
+- [ ] Use Authorization Code flow with **PKCE** for every client type, including confidential server clients (defense in depth, and some providers now require it).
+- [ ] Generate `state` per request (cryptographically random, stored server-side, compared on callback); add `nonce` for OIDC and validate it in the ID token.
+- [ ] **Redirect URI discipline:** register exact URIs only — no wildcards, no prefix matching, no open redirectors on your callback. One URI per environment (dev/staging/prod are separate client registrations).
+- [ ] Validate the ID token fully: signature (provider JWKS, with key rotation handled), `iss`, `aud`, `exp`. Never trust claims from an unvalidated token or from the userinfo endpoint alone.
+- [ ] **Token storage:** access/refresh tokens encrypted at rest, server-side only; never in localStorage, never in logs, never in URLs. Refresh tokens rotate where the provider supports it; a reused refresh token = treat as compromise and revoke the family.
+- [ ] Request the minimum scopes; record which scope powers which feature so a scope removal is debuggable. Handle the user granting *fewer* scopes than requested.
+- [ ] Handle the unhappy paths explicitly: user denies consent, account linking collision (same email, different provider), provider account deleted, token revoked while a background job is mid-flight.
+- [ ] Clock skew: allow a small leeway (≤60s) on token time claims; sync server time via NTP — half of all "random" OIDC failures are clock drift.
+- [ ] Logout is a feature: local session end, provider token revocation where supported, and a documented answer to "does logging out here log them out there?" (usually: no — say so in the UI).
+
+## 3. Webhooks deep dive
+
+Webhooks are an untrusted, unordered, at-least-once input stream. Build for exactly that.
+
+- **Signature verification, always:** verify the provider's HMAC/signature over the *raw* request body (parse JSON only after verification — re-serialized JSON breaks signatures). Reject on mismatch with a generic 400; compare in constant time. Rotate signing secrets on the provider's schedule and support two active secrets during rotation.
+- **Idempotent handlers:** providers retry, and retries duplicate. Store the provider's event ID in a unique column; a duplicate insert = acknowledge with 200 and do nothing. Business effects (charging, emailing, provisioning) must key off the event record, never run twice for one event ID.
+- **Acknowledge fast, process async:** return 2xx within ~2–5s after persisting the raw event; do the work in a background job. A slow handler triggers provider retries, which trigger duplicates, which trigger load — the retry storm starts with your slow endpoint.
+- **Ordering is not guaranteed:** a `updated` event can arrive before `created`. Handlers must tolerate out-of-order delivery: upsert by natural key, compare provider timestamps/versions, and never let an older event overwrite newer state (keep a `last_event_at`/version guard).
+- **Replay window:** most providers let you (or an attacker with a leaked secret) replay old events. Reject events whose signed timestamp is outside a tolerance window (commonly 5 minutes) — this is part of the signature scheme on major providers; don't disable it.
+- **Retry storms (inbound):** when your endpoint was down, the provider's backlog arrives as a burst. Rate-limit your own processing queue, not the receiver (rejecting with 5xx invites more retries); shed load by event type priority — money events first, analytics last.
+- **Dead-letter handling:** events that fail processing N times go to a dead-letter store with the raw payload, the error, and a replay button/procedure. A dead-letter queue nobody inspects is a silent data-loss machine: alert when depth > 0 for critical event types, and review weekly.
+- **Reconciliation backstop:** webhooks get lost even when everyone behaves. For anything money- or entitlement-shaped, run a periodic job that pulls the provider's current state and diffs it against yours. The webhook is the fast path; reconciliation is the truth path.
+
+**Micro-example:** payment provider sends `payment.succeeded` twice (retry) and once more after a manual resend from their dashboard. Correct behavior: three deliveries, one event ID row, one fulfillment. If your fulfillment count is 3, your idempotency is decorative.
+
+## 4. Payment gateway specifics
+
+- **Never touch raw card data.** Use the provider's hosted fields/elements or hosted checkout so card numbers go from the customer's browser straight to the provider. The moment raw PAN data crosses your server, you inherit the heavy end of PCI DSS (SAQ D instead of SAQ A) — an audit program, not a feature.
+- **3-D Secure flows:** expect a redirect or challenge step that can be abandoned, fail at the bank, or complete minutes later. The payment is not final at form submit: model states explicitly (`requires_action → processing → succeeded/failed`) and drive the UI and fulfillment off **webhook-confirmed** states, not off the browser's return URL (users close tabs; banks redirect late).
+- **Amounts are integers** in the currency's smallest unit, with the currency code attached at every step. A float, or a missing currency, is a defect even if today's tests pass.
+- **Reconciliation:** daily job comparing provider settlements/charges against your orders: every charge has an order, every order's amount matches, every refund links to a charge. Discrepancies go to a human queue with an aging report — unreconciled money older than 7 days is an incident, not a backlog item.
+- **Refund paths are separate code:** full vs partial, refund to original method only, refund webhooks are also asynchronous (a refund can fail days later if the account closed). Test the refund path as thoroughly as the charge path; the first time you run it must not be for an angry customer.
+- **Test cards ≠ sandbox money:** test cards exercise shapes (decline codes, 3DS challenges, insufficient funds). They do not exercise settlement timing, currency conversion, or payout behavior. Before launch, run at least one real micro-transaction end-to-end (charge → settlement → refund) in production with your own card.
+- **Disputes/chargebacks:** the provider notifies via webhook; evidence submission has hard deadlines. Wire the webhook to a ticket with the deadline as its due date on day one.
+
+## 5. File import / export integrations (CSV, SFTP drops, partner feeds)
+
+- **Schema drift is the default:** partners add columns, rename headers, change date formats, switch encodings. Validate the header/schema against an expected contract *before* processing a single row; a drifted file is rejected whole and alerted, never "best-effort parsed".
+- **Partial failures:** process row-wise with per-row results (accepted / rejected + reason). The import report is a deliverable: counts, rejection reasons grouped, and the rejected rows downloadable for the sender to fix. Never fail a 10,000-row file silently on row 9,999 — and never half-apply it without saying which half.
+- **Idempotency & resumability:** key imports by (source, file hash or batch ID); re-delivering the same file is a no-op or an explicit re-run, never a duplicate insert. For large files, checkpoint progress so a crashed import resumes instead of restarting (and double-applying the first half).
+- **Encoding & format traps:** pin the expected encoding (UTF-8), delimiter, quoting, decimal separator, and date format in the feed agreement; add a canary row count and total/checksum where the format allows it.
+- **Exports are integrations too:** your consumers break when *you* drift. Version the export schema, announce changes, and keep the old version running through the announced window.
+
+## 6. External API failure modes → required client behavior
+
+| Failure mode | Detection | Required client behavior |
+|---|---|---|
+| Slow responses / timeouts | Per-call timeout budget (connect + total), p95 latency alarms | Set explicit timeouts on **every** call (no infinite waits); total budget per user request; fail with a mapped error, never hang the request thread |
+| Rate limiting (429) | 429 status, `Retry-After` header | Honor `Retry-After`; exponential backoff **with jitter**; queue or shed non-critical calls; never tight-loop retry (you become the outage) |
+| 5xx / partial outage | Error-rate alarms per endpoint | Bounded retries (e.g. 3) with backoff+jitter for idempotent calls only; circuit breaker opens after a failure threshold so you stop hammering a dying provider |
+| Provider fully down | Circuit breaker open, synthetic check failing | Serve the degraded path: cached/stale data clearly labeled, or a honest "temporarily unavailable" state; queue writes for later sync where the domain allows |
+| Silent data changes (same schema, different meaning) | Reconciliation diffs, canary records with known expected values | Contract tests in CI against the sandbox + a scheduled production canary; alert on semantic diffs, not just errors |
+| Auth expiry mid-operation | 401s clustered by token age | Refresh proactively before expiry; on 401, refresh once and retry once — then fail, never loop |
+| Duplicate delivery / replay | Duplicate event IDs | Idempotent handlers (§3); duplicates are normal traffic, not errors |
+| Clock/timezone mismatches | Timestamp diffs vs provider | Store UTC instants end-to-end; convert only at display; log both raw and parsed timestamps when debugging |
+
+**Circuit breaker, concretely:** closed (normal) → after e.g. 50% failures over 20 requests, open (fail fast locally for 30–60s, no provider calls) → half-open (one probe request; success closes, failure re-opens). Without it, your retry logic converts their 10-minute outage into your cascading failure.
+
+**Backoff, concretely:** delay = min(cap, base × 2^attempt) + random jitter, e.g. base 200ms, cap 30s. Fixed-interval retries from many clients synchronize into thundering herds; jitter is not optional decoration.
+
+## 7. Sandbox-vs-production divergence checklist
+
+Run before go-live; every "unknown" is a launch blocker for money/auth paths.
+
+- [ ] Error shapes: do sandbox errors match production error codes/formats for the cases you handle?
+- [ ] Rate limits: sandbox limits are usually lower or absent — what are the *production* limits, and does your backoff handle them?
+- [ ] Webhook signing: different signing secret per environment; production secret stored and rotatable?
+- [ ] Data realism: sandbox data is clean; production has legacy states (old subscriptions, edge-case currencies, deleted-but-referenced entities). Which of your flows assume clean data?
+- [ ] Feature flags on the provider side: is every feature you use enabled on the *production* account (many providers gate features per account, not per API key)?
+- [ ] Money movement: settlement timing, payout schedule, minimum amounts — sandbox settles instantly; production does not.
+- [ ] Compliance gates: provider may require business verification (KYC) before production charges/refunds work at all. Discovered on launch day = launch delayed.
+- [ ] URLs & allowlists: production webhook endpoints registered, IP allowlists updated, redirect URIs registered for the production client (§2).
+
+## 8. Monitoring an integration in production
+
+- **Synthetic checks:** a scheduled job (every 1–5 min for critical paths) performs a harmless read against the provider (e.g. fetch a known object) and records success/latency. This detects provider outages before your users do and gives you the timeline evidence for support tickets.
+- **Metrics per integration, minimum:** call volume, error rate by class (4xx yours / 429 / 5xx theirs / timeouts), p50/p95 latency, webhook lag (event time → processed time), dead-letter depth, reconciliation diff count.
+- **Alert thresholds (starting points, tune to your traffic):** error rate >2% over 10 min → page; webhook lag >5 min → page for money events; dead-letter depth >0 for critical types → ticket same day; reconciliation diff ≠ 0 → ticket next business day, page if money-shaped; synthetic check failing 3 consecutive runs → page.
+- **A status-page habit:** when your alerts fire, the first diagnostic step is the provider's status page + your synthetic timeline — record both in the incident note. "Provider acknowledged incident 14:02–14:47" closes arguments later.
+- **Quarterly review:** re-run §1's evaluation against reality (their incident history vs. your experience, price changes, deprecation announcements). Integrations decay; the review is where you notice before the outage does it for you.
+
+## 9. Outbound calls — retries, idempotency, and timeouts in your client
+
+- **Idempotency keys on unsafe calls:** for any POST that creates or charges, generate a key per *business operation* (not per attempt) and send it on every retry. Without it, a timed-out request you retry becomes a duplicate charge/order — the timeout told you nothing about whether the provider processed it.
+- **Retry only what's safe:** GETs and idempotency-keyed POSTs may retry; unkeyed POSTs may not. When an unkeyed call times out, the correct move is to *query* the provider for the operation's outcome, not to fire it again.
+- **Timeout budget math:** your user's request cannot outlive its own deadline. If your API allows 10s total and the provider call takes 8s at p99, two retries do not fit — the budget decides the retry count, not optimism. Allocate: provider call ≤60% of the request budget, retries inside the remainder, and fail with a mapped, honest error when the budget is spent.
+- **Connection hygiene:** reuse connections (keep-alive/pools), set connect and read timeouts separately, and cap concurrent calls per provider so one slow provider cannot consume every worker you own (bulkhead pattern).
+
+## 10. Testing the integration before production
+
+| Layer | What it proves | Where it runs |
+|---|---|---|
+| Contract tests against the provider sandbox | Your requests/response handling match the provider's actual shapes, incl. error bodies | CI, on every change to the integration |
+| Negative-path drills | Declines, expiries, insufficient funds, revoked tokens, malformed webhooks all behave as designed | Sandbox, scripted — providers give test triggers; use every one |
+| Webhook replay test | Replaying yesterday's captured events into staging changes nothing twice (idempotency proof) | Staging, pre-launch and after handler changes |
+| Kill-switch drill | Disabling the integration degrades the product gracefully (no 500s, honest UI states) | Staging, pre-launch |
+| Deprecation drill | You can name the provider's current API version, its sunset date if any, and the owner who watches the changelog | Process check, quarterly |
+
+- **Record provider behavior you depend on** (quirks log in the integration artifact): undocumented limits, odd error shapes, sandbox-only behaviors. Providers change staff and docs; your quirks log is the memory.
+- **Change management:** subscribe to the provider's changelog/status feed *as a team*, not as one person's inbox. An unannounced-to-you breaking change discovered by users is a monitoring failure on your side too.
+
+## 11. Go / no-go checklist for launching a new integration
+
+- [ ] Provider evaluation (§1) recorded; disqualifiers checked for money/auth paths
+- [ ] OAuth/OIDC checklist (§2) complete, unhappy paths handled
+- [ ] Webhooks: signature verified on raw body, idempotent handlers proven by replay test, dead-letter alert wired
+- [ ] Failure-mode table (§6) reviewed; timeouts, backoff+jitter, circuit breaker implemented and load-tested at least once
+- [ ] Sandbox-vs-prod divergence checklist (§7) has zero "unknown" on critical paths
+- [ ] Reconciliation job running (money/entitlement data) with a human queue for diffs
+- [ ] Synthetic check + §8 alerts live in production *before* real traffic arrives
+- [ ] Rollback/disable plan: how the feature degrades with the integration off, and who may decide to turn it off
+
+
+---
+
 # ===== SKILL — skills/orchestrator-intake/SKILL.md =====
 
 ---
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -2235,6 +2854,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 12. References
 
 - `references/playbook.md` — the 8-dimension ambiguity rubric, the question bank by 6 groups, the full EARS pattern table, worked routing examples, and edge cases for when the user does not cooperate with answering.
+- `references/elicitation-deep-dive.md` — read when the standard question round still leaves ambiguity, stakeholders conflict, or the request is phrased in quality adjectives: deep 5 Whys, laddering, scenario walkthroughs, the NFR question catalog, scope-splitting heuristics, decision-log discipline, and pricing residual ambiguity after 2 rounds.
 - `templates/SPEC.template.md` — the official spec structure.
 - `workflow/ROUTING-MATRIX.md` — the 12-question decision tree + routing table by task type.
 - `workflow/MASTER-WORKFLOW.md` — the gate rules for the whole company.
@@ -2242,7 +2862,174 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/orchestrator-intake/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/orchestrator-intake/references/elicitation-deep-dive.md =====
+
+# Elicitation Deep Dive — Advanced Techniques for Gate 0
+
+> Companion to `references/playbook.md` (the rubric, question bank, and EARS patterns).
+> This file is the advanced toolkit: use it when the standard question round leaves ambiguity behind,
+> when stakeholders disagree, or when the user's words are quality adjectives instead of requirements.
+
+## 1. The 5 Whys — done properly
+
+The 5 Whys fails when each "why" is answered with a restatement. Rules:
+- Each answer must name a **cause**, not a symptom and not a solution. If the answer is a solution ("because we need a dashboard"), ask "why do you need that?" — you are still at the symptom layer.
+- Stop when you reach a cause the user can **act on or measure** (a lost sale, a manual step, a compliance risk), or when the answer becomes "because that's how it is" twice in a row — that layer is a constraint, record it as one.
+- Branch, don't tunnel: at each level, ask "and what else causes that?" once. Real problems usually have 2–3 root causes; a single chain hides them.
+- Write the chain into `00-idea.md`. The final cause becomes the spec's Problem statement; every intermediate layer is evidence for prioritization.
+
+**Worked chain** — request: "Add an export button to the reports page."
+| Step | Answer | Layer |
+|---|---|---|
+| Why export? | "The accountant asks for the numbers every month." | symptom |
+| Why does she ask you? | "She can't see the reports herself." | cause candidate |
+| Why can't she? | "Her account role has no report permission." | cause candidate |
+| Why not? | "When roles were set up, finance was never added." | **root cause (process)** |
+| Why was she never added? | "Nobody owns role administration." | root cause (ownership) |
+
+Outcome: the real task is a permission change + a role-administration owner — a 1-hour fix, not a reporting feature. The export button is still recorded (it may be wanted for other reasons), but the spec's Problem section now names the root cause, and routing changes completely.
+
+## 2. Laddering — feature → consequence → value
+
+Users request features; specs need values. Ladder upward with three prompts, in order:
+1. "What will that let you (or the user) **do** that you can't do today?" → consequence
+2. "Why does that matter — what goes wrong, or what is lost, without it?" → impact
+3. "How would you know it worked — what number or event would change?" → measurable value
+
+Stop laddering a branch when the answer repeats, becomes abstract ("be more professional"), or the user says "that's just it". Record the top rung as the requirement's **rationale** — BA and QA use it to judge edge cases the literal wording doesn't cover ("the point is the accountant stops waiting" decides questions the button spec never mentions).
+
+**Micro-example:** "Add dark mode" → consequence: "staff use the app on night shifts" → impact: "the bright screen wakes patients / causes complaints" → value: "zero brightness complaints in night-shift feedback". The spec now protects the *value* (readability at night) — which also admits alternatives (a dimmed night theme) the feature request would have excluded.
+
+## 3. Scenario and day-in-the-life walkthroughs
+
+When behavior is still vague after direct questions, stop asking abstractly and walk a concrete story:
+- Pick the **most typical actor** and one specific day: "It's Tuesday 9:05, a customer has just paid. Walk me through exactly what happens next — who sees what, in what order?"
+- Narrate it back step by step and stop at every verb: "You said the manager 'checks' the order — checks *what*, against *what*, and what happens if it fails?"
+- Then run two variant passes over the same story: the **bad day** (payment fails, user abandons halfway, two people act at once) and the **busy day** (100× volume). Most missing requirements live in these two passes, not the happy path.
+- Every step of the walkthrough maps to one or more EARS requirements; any step you cannot narrate concretely is an unresolved `[TBC]` with an owner.
+
+Use scenarios when: the task involves a workflow, multiple actors, timing, or money. Skip them for pure content or cosmetic tasks — they cost the user real time.
+
+## 4. Eliciting non-functional requirements (NFR catalog)
+
+Users almost never volunteer NFRs; unasked, they become late-stage surprises. Ask one question per category that applies — do not read the whole catalog at the user.
+
+| Category | The question to ask | What a usable answer looks like |
+|---|---|---|
+| Performance | "What is the slowest acceptable response for the main action, on a normal connection?" | a number + condition ("list opens < 2 s on 4G") |
+| Scale | "How many users / records / orders at launch, and in a year if it goes well?" | two numbers (now, growth) |
+| Concurrency | "What happens when two people do this at the same time?" | rule: block, queue, last-wins, or merge |
+| Availability | "If this is down for an hour, what breaks? When is downtime acceptable?" | criticality tier + maintenance window |
+| Security posture | "Who must NOT be able to see or do this? Is any of it personal, financial, or health data?" | named exclusions + data class |
+| Devices & platforms | "Which devices/browsers/versions must it work on — including the oldest?" | explicit minimum (e.g. "Android 10+, Chrome last 2") |
+| Weak environments | "Will users be on slow networks or low-end devices? Must anything work offline?" | yes/no + which flows degrade how |
+| Accessibility | "Must it meet an accessibility standard? Which users with disabilities are expected?" | target (e.g. WCAG AA) or explicit non-goal |
+| Internationalization | "Which languages, currencies, time zones, and date formats — now and planned?" | list + whether design must leave room |
+| Data retention | "How long must this data be kept? Who can delete it, and must deletion be provable?" | retention period + deletion rule |
+| Auditability | "If something goes wrong, must we be able to prove who did what, when?" | yes/no → audit-log requirement |
+| Cost ceiling | "Is there a per-user or monthly infrastructure cost this must stay under?" | a budget number or "not a constraint" |
+
+Record each answered NFR as a numbered NFR-xx in the spec with its measurement. A category the user explicitly waves off is recorded as "not a constraint — confirmed", which protects later roles from gold-plating it.
+
+## 5. Stakeholder conflict resolution protocol
+
+When two stakeholders (or the user vs. the PROJECT-PROFILE) want incompatible things:
+1. **Name the conflict precisely** — one sentence each side, in their own terms. Most "conflicts" dissolve here: the sides often want different *things*, not the same thing differently.
+2. **Classify it:** (a) factual disagreement → settle with evidence (data, a test, the source document); (b) priority disagreement → it is a decision, not a fact — go to step 3; (c) misunderstanding → restate both positions until each side confirms the other's summary.
+3. **Escalate as a decision question**, never resolve it yourself: present both options with the cost/consequence of each and your recommendation labeled as a recommendation. The user (or the named decision owner) decides.
+4. **Record the decision and the loser**: the decision, who made it, the date, and the rejected option with its reason go into the spec's Clarifications/decision log. The rejected side is not deleted — it is the first thing needed if the decision is revisited.
+5. If no decision is possible now: mark the requirement `[TBC — blocked on decision D-n]`, route around it if the rest of the work is independent, and say explicitly what cannot start.
+
+Never average two conflicting requirements into a compromise nobody asked for ("show 15 records" from "10" vs "all") — a merged number satisfies neither side and hides the disagreement from the approver.
+
+## 6. Scope-splitting heuristics
+
+Split the task before routing when **any** of these is true:
+- The spec needs more than ~12 functional requirements, or the playback takes more than ~7 lines to state.
+- Two parts have different users, different success criteria, or different deadlines.
+- One part is well understood and another is exploratory — the exploratory part will churn the whole spec.
+- A part touches money/permissions/data migration while the rest is cosmetic (the risky part deserves its own gates and pace).
+- The user says "and also…" three or more times — each "also" is a candidate split.
+
+**How to sequence the parts:**
+1. Split along **value seams**: each part must be independently usable or independently verifiable. Never split by technical layer alone ("backend first, UI later") as separate user-facing tasks — split by user-visible outcome, and let the Architect sequence layers inside each part.
+2. Order by: (a) the part that unblocks the most other parts, (b) the riskiest assumption first if a cheap part can test it, (c) the user's stated deadline order.
+3. Each part gets its own task folder and spec; the original `00-idea.md` stays as the parent record linking them, with the split rationale.
+4. State what is deferred, not dropped: deferred parts are listed in the parent's Out of Scope with "deferred to task <slug>", never silently vanished.
+
+## 7. Decision log discipline
+
+Every clarification answer that *chooses* between alternatives is a decision. The log (in the spec's Clarifications section or a `DECISIONS.md` for long tasks) has one row per decision:
+
+| Field | Content |
+|---|---|
+| ID | D-01, D-02… |
+| Decision | one sentence, active voice ("Cancel is allowed up to 4 hours before") |
+| Alternatives rejected | each with the one-line reason |
+| Decided by / date | the user or named owner — never "the team" |
+| Affects | REQ/NFR ids it constrains |
+| Reversible? | cheap / costly / irreversible — irreversible decisions get extra scrutiny before proceeding |
+
+Rules: a decision that later changes is **superseded**, not edited — add a new row and mark the old one "superseded by D-n". If you cannot find who decided something, treat it as undecided and ask. Roles downstream cite decision IDs when a requirement looks arbitrary ("per D-03") instead of re-litigating it.
+
+## 8. "Just make it good" — operationalizing vague quality words
+
+Quality adjectives are placeholders for criteria the user has not articulated yet. Never let one into a spec untranslated. Use this table to convert, then confirm the numbers with the user (propose the default, let them correct it):
+
+| User says | Ask / propose | Measurable translation (examples) |
+|---|---|---|
+| "fast" | "Fast for which action, on what connection?" | "Main list renders < 2 s on 4G; actions respond < 300 ms or show progress" |
+| "simple" | "Simple for whom — first-time or daily users?" | "Core task completable in ≤ 3 steps; a new user succeeds unaided in testing" |
+| "modern" | "Modern like which product?" (demand a reference) | "Matches the patterns of <named reference>: <2–3 concrete traits>" — no reference, no requirement |
+| "secure" | "Secure against whom, protecting what?" | "Passes Gate 4's mandatory tests: wrong-role, IDOR, expired-token cases all rejected" |
+| "reliable" | "What failure hurts most, and how often is acceptable?" | "Error rate < 0.1% on the main flow; failed submissions recoverable without data loss" |
+| "user-friendly" | "Which users struggled, at which step?" | "Task success ≥ 90% in a 5-person walkthrough; zero required training materials" |
+| "scalable" | "Scale to what number, by when?" | "Holds targets at <N> concurrent users / <M> records, verified by load check" |
+| "clean / polished" | "Show me two screens — one that feels clean, one that doesn't." | Convert the contrast into design rules (spacing, hierarchy, state coverage) for Gate 3 |
+| "like <product X>" | "Which parts of X — look, flow, or behavior?" | Name the borrowed trait per screen; record what is explicitly NOT copied |
+
+If the user cannot or will not quantify a quality word after one attempt with a proposed default, record it as a **direction** (guides judgment, not a testable criterion) and say so in the spec — QA must never be handed an unmeasurable success criterion disguised as one.
+
+## 9. Estimating the ambiguity that remains after 2 rounds
+
+After the second clarification round, some dimensions stay vague. Do not pretend otherwise — quantify and price the residue:
+1. Re-score the 8 ambiguity dimensions. For each dimension still at Vague (1) or Unknown (2), write: what is unknown, the `[ASSUMPTION]` you are forced to make, and its **blast radius** — what gets reworked if the assumption is wrong (one screen? the data model? the whole flow?).
+2. Classify each remaining assumption: **cheap to reverse** (proceed, note it), **costly to reverse** (proceed only with the user's explicit acceptance of the rework risk), **blocking** (the work cannot responsibly start — say so, name the one question that unblocks it, and stop).
+3. State the summary in the spec and in STATUS.md: "Residual ambiguity: 2 assumptions — 1 cheap, 1 costly (accepted by user on <date>), 0 blocking."
+4. Set a **revisit trigger** for each costly assumption: the earliest moment reality will test it (first prototype review, first real data, contract signing) — and which gate owns re-checking it.
+
+An intake that ends with named, priced, owned ambiguity has done its job. An intake that ends claiming zero ambiguity after a vague request has failed silently.
+
+## 10. Mining existing artifacts before you ask
+
+Questions are expensive; documents are free. Before any clarification round, mine what already exists — every fact found here is a question you do not ask (the playbook's Step 2 discipline, expanded):
+
+| Source | What to extract | Trap to avoid |
+|---|---|---|
+| PROJECT-PROFILE | stack, design system, invariants, review format | treating `[TBC]` fields as facts — they are open questions wearing a uniform |
+| Prior task folders (`tasks/`) | decisions (D-ids), rejected options, residual assumptions | assuming a past decision still holds after a scope or stakeholder change — confirm, don't inherit blindly |
+| Existing product / codebase | what the current behavior actually is (screens, states, limits) | documenting the current behavior as the *requirement* — today’s behavior may be the bug being reported |
+| Analytics / support tickets / reviews | where users actually struggle, in their words | loud-minority bias: one angry ticket is a hypothesis, not a requirement |
+| Competitor / reference products the user names | the concrete traits behind "make it like X" | copying surface look while missing the behavior the user actually valued |
+
+Rule: anything mined is labeled by source in `00-idea.md` ("per PROJECT-PROFILE §4", "per task 2026-…/D-03"). If two sources disagree, that disagreement becomes a clarification question — sources never silently outrank each other except the PROJECT-PROFILE, which wins by design (AGENTS.md rule 3).
+
+## 11. Running the round — sequencing and recovery
+
+**Sequencing inside one round.** Order questions so early answers can retire later questions: scope before behavior, behavior before constraints, constraints before aesthetics. If the user's answer to Q1 makes Q4 moot, drop Q4 and say so ("that settles Q4 as well") — visible adaptivity is what makes the round feel like a conversation instead of a form.
+
+**Recovery moves when the round goes wrong:**
+- *User answers a different question than the one asked* → their answer is data (it is what they care about); record it, then re-ask the original once, shorter. Twice deflected = the question is probably unanswerable by this person — route it to its real owner or log it as residual ambiguity.
+- *User contradicts an earlier answer* → do not pick the newer one silently; surface the pair ("earlier you said X, now Y — which governs?") and log both in the decision log, the loser marked superseded.
+- *User gets impatient* ("just start") → offer the explicit trade: "I can start now on these 3 recorded assumptions; if any is wrong, the rework lands at Gate N and costs roughly X." If they accept, the assumptions and their acceptance go into the spec verbatim. Impatience is a decision, and decisions get logged.
+- *User delegates back* ("you decide") → decide, but as a *proposed default with a reversal cost stated*, and log it as decided-by-agent-with-user-delegation. "You decide" transfers the pen, not the accountability for recording it.
+
+**Closing the round.** End every round by restating: questions asked, answers received, questions deliberately not asked (and why — found in artifacts, or deferred), and what happens next (playback). This closing summary is the audit trail that the clarification duty was actually discharged — and it is what the WT-01-style review of your own gate will look for.
+
+
+---
+
+# ===== SKILL REFERENCE — skills/orchestrator-intake/references/playbook.md =====
 
 # Playbook — Orchestrator / Intake (deep reference)
 
@@ -2365,7 +3152,7 @@ A summary-style intake would likely keep S-01/S-02 and lose S-05 and S-07 — ex
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # QA / Tester — Gate 7
@@ -2724,6 +3511,7 @@ data, or evidence — treat that as a failed handoff and complete the record.
   Decision Table, State Transition), the traceability matrix, the bug report
   standard, the severity table, regression strategy, and how to run the security
   tests.
+- `references/test-design-deep-dive.md` — read when deciding where testing effort goes: risk-based prioritization, exploratory charters, test data, non-functional checks, flaky-test protocol, regression selection, defect clustering, decision-grade reporting.
 - `templates/TEST-REPORT.template.md` — the test report template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision questions
   8 and 10).
@@ -2731,7 +3519,7 @@ data, or evidence — treat that as a failed handoff and complete the record.
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/qa-tester/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/qa-tester/references/playbook.md =====
 
 # Playbook — QA / Tester (deep reference)
 
@@ -2883,13 +3671,164 @@ Execute them like ordinary test cases, plus these notes:
 
 ---
 
+# ===== SKILL REFERENCE — skills/qa-tester/references/test-design-deep-dive.md =====
+
+# Test Design & Execution — Deep Dive
+
+> Read this when the basic techniques (playbook.md: EP, BVA, decision tables, state transition) are not enough to decide **where the testing effort goes, how deep, and what to do with the results**. This file is about judgment: risk, exploration, data, flakiness, and reporting that changes decisions.
+
+## 1. Risk-based testing — effort follows risk, not coverage vanity
+
+**Risk score = Probability of failure × Impact of failure**, each rated 1–3. Test depth follows the score, not uniform thoroughness (uniform thoroughness is how teams run out of time on the login page and never test refunds).
+
+| Factor feeding Probability | Factor feeding Impact |
+|---|---|
+| Code churn (recently / frequently changed) | Money movement or irreversible actions |
+| Complexity (branches, integrations, concurrency) | Data loss or corruption potential |
+| New technology or new team area | Legal / compliance / safety exposure |
+| History of defects in this area | Number of users affected × visibility |
+| Weak or missing existing tests | No workaround exists for the user |
+
+**Depth by score:** 6–9 → design techniques + negative cases + exploratory charter + regression additions, tested first. 3–4 → standard cases + boundaries. 1–2 → smoke-level confirmation only.
+
+**Worked example** (a release touching 4 areas):
+| Area | P | I | Score | Decision |
+|---|---|---|---|---|
+| Checkout discount logic (rewritten, money) | 3 | 3 | 9 | Full technique set + charters, runs first, blocks release |
+| Profile avatar upload (changed library) | 2 | 1 | 2→ with file-handling risk re-rate I=2 | 4 | Boundary file sizes/types + error cases |
+| Settings page label changes | 1 | 1 | 1 | Smoke only |
+| Legacy report export (untouched, but flaky history) | 2 | 2 | 4 | Targeted regression on the known flaky paths |
+
+Re-rate impact honestly: avatar upload looked like impact 1 until "arbitrary file upload" was considered — risk assessment is a thinking tool, not a form.
+
+## 2. Exploratory testing charters — a ready library
+
+A charter = mission + scope + timebox (30–90 min), executed unscripted, with notes and defects as output. Copy and adapt:
+
+| # | Area | Charter |
+|---|---|---|
+| 1 | Auth | Explore session behavior: log in, expire the token mid-task, open the app in a second tab/device, log out there — does every path end in a sane state with no stale access? |
+| 2 | Forms | Explore a long form with hostile input: paste oversized text, emoji, RTL text, HTML/script strings, autofill, browser back mid-entry, submit twice fast — what survives, what's lost, what's corrupted? |
+| 3 | Money | Explore totals under manipulation: change quantities at every step, apply/remove discounts in odd orders, round at boundaries, switch currency — can you ever make the displayed total differ from the charged total? |
+| 4 | States | Explore an entity's lifecycle out of order: cancel a completed item, edit a locked one, reopen a closed one via back button, deep link, or a second tab — does the state machine hold everywhere, not just on the happy path? |
+| 5 | Offline / bad network | Explore the main flow while throttling to 3G, dropping the connection mid-submit, and reconnecting — duplicates? lost work? honest error states? |
+| 6 | Permissions | Explore every protected screen/action as the wrong role, with a copied URL, a stale session, and a modified request — is enforcement server-side everywhere? |
+| 7 | Time | Explore anything date-shaped across midnight, month-end, DST change, and a different device timezone — what shifts, duplicates, or vanishes? |
+| 8 | Empty & extremes | Explore with zero data, one item, and 10,000 items: first-run experience, pagination, search with no results, sorting stability. |
+| 9 | Navigation | Explore deep links, refresh on every screen, back/forward through a completed flow, and opening the same flow in two tabs — where does the app contradict itself? |
+| 10 | Recovery | Explore failure recovery: kill the app mid-operation, let a background job fail, restore from the error state offered — does the user have a truthful path forward? |
+
+**Charter discipline:** one charter per session, notes timestamped, every suspicion either becomes a defect, a scripted case, or a recorded non-issue. "Explored, seemed fine" with no notes is not a session.
+
+## 3. Test data management
+
+| Category | Examples | Rules |
+|---|---|---|
+| Boundary data | Min/max amounts, longest names, edge dates | Keep as named, reusable fixtures — never retype per test |
+| Persona data | One user per role/permission set, one per subscription tier | Stable accounts owned by QA; credentials in the team vault, not in test cases |
+| Volume data | 10k-row lists, full catalogs | Generated by script, seeded once per environment, refreshed on schedule |
+| Hostile data | Injection strings, unicode edge cases, malformed files | Lives in a labeled fixture file; never mixed into persona data |
+| Production-like data | Anonymized real shapes/volumes | **Anonymized before it leaves production**: names, emails, phones, free-text scrubbed; treat the scrub script as security-critical code |
+
+- **Seeding:** every environment rebuilds its data from scripts in version control (seed scripts are code: reviewed, idempotent, runnable by anyone). "The staging DB just has stuff in it" is not a strategy.
+- **Reset strategies, cheapest first:** (1) tests create their own data and clean up after themselves; (2) transactional rollback per test where the stack allows; (3) snapshot restore between suites; (4) full reseed nightly. Pick per suite by runtime cost — and never let tests share mutable data they can fight over (the #1 homemade flakiness source).
+- **Privacy law applies to test data too:** real user data in a test environment is a data breach waiting for a screenshot. If it isn't anonymized, it doesn't leave production.
+
+## 4. Non-functional testing (QA's share)
+
+### Performance spot checks (not a load-test program — smoke for budgets)
+- Agree **budgets** with the Architect/BA first (e.g. key screen interactive <2.5s on mid-range Android over 4G; key API p95 <500ms). No budget = no verdict, only vibes.
+- Measure the top 3–5 user journeys on a *representative device/network*, not the dev workstation: record device, network profile, build, and numbers in the report.
+- Regression rule: a >20% degradation on a budgeted journey is a defect with severity by impact, even if "it still works".
+
+### Accessibility testing workflow
+1. Automated pass first (axe or equivalent in browser tooling / Lighthouse): catches roughly the mechanical third — labels, contrast, roles.
+2. Keyboard-only pass on the main flows: visible focus, logical order, no traps, dialogs escapable.
+3. Screen-reader spot check (one of NVDA/VoiceOver/TalkBack) on the top journey: names announced, state changes announced, errors identified in text (not color alone).
+4. Zoom/reflow at 200% and the smallest supported viewport: nothing clipped, nothing overlapping, no horizontal-scroll traps.
+5. Record what was *manually* checked vs tool-checked — automated "0 issues" is not an accessibility pass.
+
+### Compatibility matrix by user share (not by what's on your desk)
+Build the matrix from the product's actual analytics: cover the browser/OS/device combinations that make up ~95% of real users, test the top tier fully, the next tier on smoke. A combination with 0.2% share and no paying users does not get equal time with the 40% combination. Re-derive the matrix quarterly — user share drifts.
+
+## 5. Flaky test protocol
+
+A flaky test (same code, alternating pass/fail) is a defect in the test or the product — never a nuisance to be retried into silence.
+
+1. **Detect:** CI records per-test pass history; any test failing then passing on re-run without a code change is flagged flaky automatically.
+2. **Quarantine:** a confirmed flaky test moves to a quarantine suite within one working day: it still runs (results visible), but does not block the gate — with an owner and a **quarantine expiry (≤2 weeks)**. Expired quarantine = the test is fixed, deleted with a recorded reason, or the gate blocks again. Permanent quarantine is deletion by lying.
+3. **Root-cause the usual suspects, in order:** shared mutable test data (§3) → timing/async waits (fixed sleeps instead of condition waits) → test-order dependence → environment drift (timezones, dates, external services) → genuine product race condition (the flake was the messenger — escalate, don't "fix the test").
+4. **Never-ignore policy:** "re-run until green" as a team habit is banned. Every flake occurrence is counted; a suite with >2% flake rate is itself reported as a quality defect in the test report, because a suite people don't trust protects nothing.
+
+## 6. Regression suite selection — decision rules by change type
+
+| Change | Minimum regression |
+|---|---|
+| Copy / styling only | Smoke suite |
+| One feature's logic | That feature's full suite + smoke |
+| Shared component / library upgrade | Smoke + suites of every consuming feature |
+| API contract change | Contract consumers' suites + integration backbone flows |
+| Data migration | Migration rehearsal on a production-shaped copy + read/write suites on migrated data |
+| Auth / permissions touch | Full security test list + smoke (no exceptions) |
+| Hotfix under time pressure | The fix's reproducing case + smoke + the suites of adjacent areas — and a scheduled full run within 24h, recorded in the report as deferred risk |
+| Nothing else fits | Full suite |
+
+Rule of thumb: regression scope is chosen from the **blast radius of the change**, not from how much time is left. If time forces a cut, the cut and its risk are written into the test report and accepted by the release decision-maker — silently unrun suites are how "tested" releases break.
+
+## 7. Defect clustering & Pareto feedback
+
+- Weekly (or per release), group defects by area/root cause. Expect a Pareto shape: ~20% of areas produce ~80% of defects. If your distribution is flat, your categorization is too coarse to be useful.
+- Cluster output feeds three places: **BA** (a cluster on misunderstood rules → the AC were ambiguous; tighten the pattern), **Architect** (a cluster on one integration/boundary → design weakness, not coder carelessness), **Developer** (a cluster on one error class → a checklist/lint/tooling gap).
+- Report clusters as trends, not blame: "5 of 14 defects this release were boundary conditions in pricing" changes the next release's test design; "Dev made 5 mistakes" changes nothing.
+- A cluster that survives two releases with no upstream change is escalated as a process defect in the QA report — QA's job includes making the same bug class stop being born.
+
+## 8. Test reporting decision-makers can act on — the 5 numbers
+
+Executives and owners do not need 40 pages; they need these five, honestly computed, plus the verdict:
+
+1. **Scope coverage:** X of Y planned cases executed (and what was cut, by name).
+2. **Pass rate:** executed cases passing, % — always beside number 1, never alone.
+3. **Open defects by severity:** P0/P1 counts (the release blockers), with the oldest one's age.
+4. **Risk remaining:** the top 3 untested or known-risk areas in plain language ("Refunds over 30 days old are untested — the provider sandbox cannot age transactions").
+5. **Flake rate / suite trust:** % of runs affected by flaky tests this period.
+
+Format rule: verdict first (PASS / PASS WITH RISKS / FAIL), then the 5 numbers, then detail for those who want it. A report whose conclusion a busy person cannot find in 30 seconds has failed its only job.
+
+## 9. Entry / exit criteria — the gate in operational form
+
+**Entry criteria (testing does not start until):** requirements/AC approved and frozen for this cycle · the build passed Integration and is deployed to the test environment · test data seeded (§3) · the risk assessment (§1) exists. Starting without these produces motion, not testing — say so in the report instead of silently absorbing it.
+
+**Exit criteria (the gate verdict is PASS only when):** all planned cases executed or explicitly cut with named risk (§8, number 1) · zero open P0/P1 · mandatory security list executed in full · regression scope per §6 completed · flake rate within threshold or reported as a defect. Any unmet item = PASS WITH RISKS at best, and only the release decision-maker may accept it — QA reports, QA does not quietly absorb risk.
+
+## 10. Severity vs priority — keep them separate
+
+- **Severity** = how bad the defect is technically (set by QA): data loss > money wrong > function broken with workaround > cosmetic.
+- **Priority** = how soon the business must fix it (set with BA/owner): a severe defect in an unused admin report may be low priority; a cosmetic defect on the checkout button of a launch campaign may be P1 priority.
+- Conflating them corrupts both conversations. The test report lists severity; the fix order is a separate, explicit decision.
+
+## 11. A worked mini test plan (one release, one page)
+
+Release: "patients can cancel appointments" (fictional). Risk table (§1) scores cancellation logic P3×I3=9 (money-adjacent, state machine, IDOR surface) → full depth.
+
+- Scripted cases from AC: cancel ≥4h before (happy), at exactly 4h (boundary), at 3h59 (reject), double-cancel (idempotent), cancel already-cancelled, slot reopens and is rebookable by another patient.
+- Security list from Gate 4: cancel with another patient's token (403), expired token (401), replayed idempotency key (no double effect).
+- Charters (§2): #4 States (cancel via back button / second tab mid-flow), #7 Time (cancel across a DST boundary).
+- Non-functional (§4): keyboard pass on the dialog; cancel flow on the slowest supported device profile.
+- Regression (§6): booking flow suite + smoke (API-adjacent change).
+- Report (§8): verdict first, 5 numbers, top risk named ("refunds n/a — appointments are free; risk is slot integrity, covered by reconciliation check").
+
+Total planned: 23 scripted cases + 2 charters. That is what "enough testing" looks like when it is derived, not guessed.
+
+
+---
+
 # ===== SKILL — skills/release-devops/SKILL.md =====
 
 ---
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Release / DevOps — Gate 8
@@ -3261,13 +4200,14 @@ The gate approver will send the work back if:
 - `references/playbook.md` — the rules for choosing the SemVer bump level, the
   changelog format, the rollback plan template, how to design the smoke test
   set, post-release monitoring, basic incident response, and light DORA.
+- `references/release-engineering.md` — read when releases get serious: deployment strategies, feature-flag discipline, environment parity, CI/CD gating, observability minimums, backup/restore drills, incident runbook, release calendar.
 - `templates/RELEASE.template.md` — the release record template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision question 9).
 
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/release-devops/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/release-devops/references/playbook.md =====
 
 # Playbook — Release / DevOps (deep reference)
 
@@ -3426,13 +4366,145 @@ compare against yourself over time.
 
 ---
 
+# ===== SKILL REFERENCE — skills/release-devops/references/release-engineering.md =====
+
+# Release Engineering — Deep Dive
+
+> Read this when "deploy it" stops being simple: multiple environments, real users who notice outages, money or data at stake. The basic playbook covers versioning, changelog, smoke tests, rollback. This file covers the engineering system around the release — strategies, flags, pipelines, observability, recovery, and incidents.
+
+## 1. Deployment strategies compared
+
+| Strategy | Mechanics | Cost | Rollback speed | Use it when |
+|---|---|---|---|---|
+| Rolling | Replace instances gradually with the new version | Lowest (no extra infrastructure) | Slow (re-deploy old version, minutes–tens of minutes) | Stateless services, low-risk changes, small scale |
+| Blue-green | Two full environments; switch traffic atomically; old env kept warm | ~2× infrastructure during the switch | Fast (switch traffic back, seconds–minutes) | You need a clean, tested cutover and can afford duplicate capacity |
+| Canary | New version gets a small % of real traffic (1→5→25→100%), promoted on metrics | Medium (traffic splitting + per-cohort metrics) | Fast for the canary cohort (route back), but bad data written by the canary stays written | High-traffic systems where real-user signal beats any staging test |
+| Feature flags | One deployment; behavior toggled per user/cohort at runtime | Low infra, high discipline cost (§2) | Fastest for behavior (flip the flag, no deploy) | Decoupling deploy from release; gradual rollouts; kill switches for risky features |
+
+**Decision rules:**
+- Rollback speed only counts if the change is *reversible*: a canary that wrote a new data format has no fast rollback — schema changes need expand→migrate→contract across releases regardless of strategy.
+- Blue-green's hidden trap: both colors share one database in most real setups, so "atomic switch" applies to code, not data. Say which one you actually have.
+- Canary without per-cohort error/latency metrics is just a slow rolling deploy with extra steps. No cohort metrics → no canary.
+- Strategies compose: canary the deploy *and* flag the risky feature inside it is normal for high-stakes changes.
+
+## 2. Feature flag discipline
+
+Flags are debt instruments: cheap to open, expensive to forget.
+
+- **Naming:** `feature.area.name` style, e.g. `checkout.discount-codes`, created in a central registry — never invented inline in code. Every flag has an **owner** and a **created date** recorded at birth.
+- **Types have lifetimes:** release flags (days–weeks, removed after full rollout), experiment flags (one experiment's life), ops/kill switches (may be permanent, reviewed quarterly), permission flags (entitlements — these are product data, not release tooling; don't manage them like release flags).
+- **Cleanup debt:** a release flag older than its rollout + 2 weeks becomes a tracked cleanup task; the flag list is reviewed at every release. Stale flags are how "the code" stops describing what the system does — and how a forgotten `if` reactivates a dead feature in production.
+- **Kill switches:** every risky feature ships with one, and the switch is *tested* (flipping it in staging is part of the release checklist). A kill switch first exercised during the incident it exists for is a hope, not a switch.
+- **Defaults matter:** flag service unreachable → the code's default decides. For money/safety features the default is OFF; for cosmetic features, the last-known value. Decide per flag, in writing, at creation.
+
+## 3. Environment management
+
+**Parity checklist (dev / staging / prod)** — drift between staging and prod is why "worked in staging" is a meme:
+- [ ] Same runtime versions (language, framework, DB engine + version), same OS family
+- [ ] Same configuration *shape*: every env var that exists in prod exists in staging (values differ; a missing key is a deploy-day surprise)
+- [ ] Same feature-flag set (values may differ; missing flags default differently per environment — see §2)
+- [ ] Data *shape* parity: staging data anonymized from prod (§privacy) or generated to the same distributions — staging with 3 test users proves nothing about the 10k-user query
+- [ ] Same external integrations in sandbox mode, with the sandbox-vs-prod divergences listed (Integration role's checklist)
+- [ ] TLS, proxies, and network rules equivalent enough that headers/redirects behave the same
+
+**Config vs secrets:** configuration (URLs, timeouts, flag defaults) may live in versioned files; secrets (keys, passwords, tokens) live only in the secret manager / platform env store, never in the repo, never in CI logs, never in screenshots. One rule covers most incidents: *if it would hurt pasted into a chat, it's a secret.*
+
+**Drift detection:** the desired state is code (infrastructure/config as code where the platform allows); a scheduled job or pipeline step diffs actual environment config against the declared state and reports differences. Manual console changes are drift by definition — either back-port them into the declaration or revert them; "we fixed it in the console during the incident" must become a follow-up task the same day.
+
+## 4. CI/CD pipeline design
+
+| Stage | Runs | Blocks merge? | Blocks deploy? |
+|---|---|---|---|
+| Lint / format / typecheck | On every push | Yes | — |
+| Unit tests | On every push | Yes | — |
+| Build + artifact | On PR | Yes (a broken build merges nothing) | — |
+| Integration / contract tests | On PR | Yes for contract-affecting changes | Yes |
+| Security scans (deps, secrets, SAST) | On PR + scheduled full | Secrets findings: yes; others by severity policy | Critical findings: yes |
+| E2E smoke on staging | After merge, on deploy to staging | — | Yes |
+| Full E2E / regression | Nightly + pre-release | — | Yes, for release candidates |
+| Manual approval | Before production | — | Yes — a named human, per this repo's gate law |
+
+- **Artifact immutability:** the artifact built once from a commit is the artifact that travels staging → production (same binary/image, promoted, never rebuilt per environment). Rebuilding for prod means prod runs code that staging never tested.
+- **Pipeline speed is a quality feature:** a 45-minute pipeline teaches developers to batch changes and skip runs. Keep the merge-blocking path under ~10 minutes; push slow suites to nightly/pre-release stages (and then actually gate on them there).
+- **Flaky pipeline tests** follow the QA flaky protocol (quarantine with expiry) — a pipeline people habitually re-run is a pipeline that protects nothing.
+
+## 5. Observability minimums
+
+- **Structured logs:** JSON (or equivalent) with timestamp, level, service, request/trace ID, and the business identifiers that let you follow one user's one operation across services. Free-text logs are unsearchable at exactly the moment you need them. Secrets and personal data are never log fields (§3's rule applies).
+- **The 4 golden signals** (per service, dashboarded): **Latency** (p50/p95/p99, successful vs failed separately), **Traffic** (requests/s), **Errors** (rate and count, by class), **Saturation** (CPU/memory/queue depth — how full the system is before it falls over).
+- **Alert quality rules:** an alert must be **actionable** (a human can do something specific), **urgent** (it cannot wait for business hours), and **symptom-based** (users are affected) rather than cause-based (a disk *might* fill next week — that's a ticket). Every alert links its runbook (§7). An alert that fires and is ignored three times is deleted or fixed at the next review — alert fatigue is an outage you schedule for later.
+- **The release connection:** every deploy is annotated on the dashboards. Half of incident diagnosis is "what changed?" — the annotation answers it in one glance.
+
+## 6. Backup & disaster recovery
+
+- **Definitions with numbers, agreed before the incident:** **RPO** = how much data you may lose, measured in time (RPO 1h = backups at least hourly). **RTO** = how long recovery may take (RTO 4h = service restored within 4 hours of declaring disaster). "We have backups" without RPO/RTO is a sentiment, not a plan.
+- **Backup types:** full (whole dataset, slow, simple), incremental/differential (changes since last full/incremental, faster, chain-dependent), and continuous (WAL/log shipping, PITR — point-in-time recovery, the strongest default for databases that support it). Choose by RPO: RPO of minutes requires continuous; nightly fulls give RPO 24h whether you admit it or not.
+- **Restore TESTING schedule:** a backup that has never been restored is a hypothesis. Restore drill: quarterly at minimum (monthly for money/data-critical systems) — restore to an isolated environment, verify integrity (row counts, checksums, a real login + key query), time it against the RTO, record the result in the release/ops log. A failed drill is a P1 defect.
+- **Backups are a security surface:** encrypted at rest, access-controlled separately from production (an attacker who owns prod must not be able to delete the backups — separate account/project, retention lock where available), and retention policy written down (e.g. daily 14d, weekly 8w, monthly 12m).
+- **Scope honesty:** backups cover data. Recovery also needs the infrastructure/config declarations (§3), secrets (recoverable from the secret manager's own backup/escrow), and this runbook — store copies outside the system they recover.
+
+## 7. Incident runbook template
+
+```
+INCIDENT: <title>            SEVERITY: S1–S4        STATUS: Investigating / Mitigating / Resolved
+Incident lead: <name>        Comms lead: <name>     Started: <time, timezone>
+Impact: <who/what is affected, since when, how measured>
+Timeline: <timestamped entries, facts only>
+Actions taken / next actions / owner of each
+Links: dashboards, alerts, deploy annotation, provider status
+```
+
+- **Roles:** Incident lead (decides, coordinates — not necessarily the fixer), fixer(s), comms lead (updates stakeholders; on a small team one person may hold two roles, but the *jobs* stay distinct).
+- **Severity ladder:** S1 = service down or data/money at risk → page now, all hands, updates every 30 min. S2 = major feature broken, workaround exists → page the owner, updates hourly. S3 = minor degradation → ticket, next business day. S4 = cosmetic → backlog. Severity is set by *user impact*, not by how embarrassed anyone is.
+- **Comms cadence:** internal update at the cadence for the severity even if the update is "no change, still investigating" — silence reads as chaos. External/user-facing messages state impact and next update time, never speculation about cause.
+- **Mitigate before diagnosing:** rollback, flag off, traffic shift — restore service first; root cause analysis happens after, with the evidence preserved (logs, snapshots) *before* the rollback destroys it where feasible.
+- **Blameless postmortem** (within 3 business days for S1/S2): timeline from records, contributing factors (systems and processes, plural — never a single person's "carelessness"), what detected it / what should have, action items with owners and dates, shared with the team. The test of blameless: would people still report near-misses after reading it?
+
+## 8. Release calendar hygiene
+
+- **Freeze windows:** no non-emergency deploys during the business's peak-risk periods (biggest sales days, regulatory deadlines, the team's skeleton-crew holidays). Freezes are declared in advance on a shared calendar; emergency fixes during a freeze need the named approver and a written reason.
+- **"Never deploy on Friday" is a risk heuristic, not a law:** the real rule is *never deploy what you cannot monitor and roll back with the people available*. A small, flagged, well-instrumented change on Friday morning with the team present can be safer than a huge change on Tuesday followed by a holiday. Decide by: change size, reversibility (§1), observability (§5), and who is actually on call — and write the reasoning in the release record when you deviate from the default.
+- **Cadence beats size:** many small releases are individually safer and easier to roll back than monthly mega-releases; if releases feel scary, the fix is smaller releases and better gates, not more ceremony per release.
+- **One calendar, visible to all:** planned releases, freezes, provider maintenance windows, and marketing/business events that spike traffic — most "surprise" collisions were on somebody's calendar, just not the shared one.
+
+## 9. Go / no-go release readiness checklist
+
+Run at the release gate; any unchecked box is either fixed or converted into a named, accepted risk in the release record.
+
+- [ ] QA verdict PASS (or PASS WITH RISKS accepted by the named decision-maker) at 100% of the gate's test cases, per the Test-Case Gate law
+- [ ] Version bumped per SemVer decision rules; changelog written for humans, not generated noise
+- [ ] The exact artifact (SHA/image digest) that passed staging is the one being promoted (§4 immutability)
+- [ ] Rollback plan written, and the rollback mechanism itself tested at least once before (a first-time rollback during an incident is a second incident)
+- [ ] Migrations: reversible, or forward-fix plan written; backup verified restorable (§6 drill is current)
+- [ ] Feature flags: states for launch set deliberately; kill switches for risky features tested (§2)
+- [ ] Dashboards annotated; alerts for the golden signals active; on-call named for the monitoring window
+- [ ] Comms ready: release notes for users/support, status-page draft if the change is user-visible
+- [ ] Calendar check: no freeze window, no colliding business event, approver and fixer available for the window (§8)
+
+## 10. Rollback decision rules
+
+- **Pre-agree the triggers** in the release record, in numbers: e.g. "error rate >2× baseline for 10 min", "p95 latency >2× baseline for 15 min", "any confirmed money/data defect". Deciding thresholds mid-incident invites both panic rollbacks and stubborn delays.
+- **Who decides:** the incident lead or the release approver — named in advance. Not a committee, not the loudest voice in the chat.
+- **Data-aware rollback:** rolling back code does not roll back data. If the bad release wrote data in a new shape, the decision is rollback-code + forward-fix-data, or stay-and-fix — spell out which, and what happens to records created during the bad window, *before* executing.
+- **The point of no return:** some steps (a destructive migration, a sent notification, a settled payment batch) cannot be undone. The release plan marks them explicitly; passing one is a deliberate, logged decision, not an accident of momentum.
+- **After any rollback:** the release is not "done" — the defect goes back to the owning role with the incident timeline attached, the fix re-enters the pipeline through the normal gates, and the re-release re-runs the failed gate's full test suite.
+
+## 11. On-call basics (the human layer of §5–§7)
+
+- A named on-call rotation exists for anything users depend on; "the team" is not an on-call. Rotations are short enough to stay humane (≤1 week in 4 per person) and handovers are written, not verbal.
+- On-call carries: the runbook (§7), dashboard/alert access, deploy/rollback permissions, and the authority to roll back without waking a manager. Authority without permissions, or permissions without authority, both fail at 3 a.m.
+- Every page is logged with its outcome (action taken / false alarm / alert defect). The log feeds the alert-quality review (§5) — pages that repeatedly wake humans for nothing get fixed or deleted, because the alternative is humans ignoring the page that matters.
+
+
+---
+
 # ===== SKILL — skills/security-engineer/SKILL.md =====
 
 ---
 name: security-engineer
 description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10, OWASP ASVS, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -3720,13 +4792,14 @@ if the flaw is in the design).
 
 - `references/playbook.md` — the deep playbook: the OWASP Top 10 table, ASVS levels, per-component STRIDE,
   the permission-matrix method, the secret rules, the QA test handover list.
+- `references/security-by-app-type.md` — read at the start of Gate 4 once the application type is known: per-type top threats, specific controls, and mandatory tests for web apps, REST APIs, mobile, multi-tenant SaaS, payments, file-upload, realtime/chat, and admin tools, plus cross-type secrets & logging hygiene.
 - `templates/SECURITY.template.md` — the frame for `04-security.md`.
 - Primary sources: OWASP Top 10, OWASP ASVS, OWASP API Security Top 10, Threat Modeling Manifesto, NIST SSDF.
 
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/security-engineer/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/security-engineer/references/playbook.md =====
 
 # Security Playbook — Deep Reference
 
@@ -3845,13 +4918,205 @@ scoring scales wholesale.
 
 ---
 
+# ===== SKILL REFERENCE — skills/security-engineer/references/security-by-app-type.md =====
+
+# Security by Application Type — Deep Dive
+
+> Read when: Gate 4 starts and you know what kind of application this is. The playbook gives the method (threat modeling, ASVS, permission matrices); this file gives the per-type threat lists, controls, and mandatory tests.
+> How to use: take the section(s) matching the app type, merge their controls into `04-security.md`, and copy their tests into the mandatory QA handover list. Most real systems match 2–3 sections — apply all of them.
+
+## Which sections apply? — Identification table
+
+| Signal in the spec/architecture | Apply sections |
+|---|---|
+| Browser UI with login | (a) + whichever data sections match |
+| JSON/HTTP endpoints consumed by apps or third parties | (b) |
+| Native iOS/Android client exists | (c) + (b) for its backend |
+| More than one customer organization shares the system | (d) + everything else that matches |
+| Money moves: checkout, subscriptions, refunds, balances | (e) + (b) |
+| Users upload files others can download/view | (f) |
+| Live messaging, channels, presence, feeds with push | (g) |
+| Any staff-only console, back office, or ops panel | (h) — even a "temporary" one |
+
+## (a) Classic Web App (server-rendered or SPA + session/token auth)
+
+Top threats: session hijacking, CSRF, XSS, clickjacking, session fixation.
+
+Controls:
+- Session cookies: `HttpOnly` + `Secure` + `SameSite=Lax` (or `Strict` where flows allow); rotate the session ID at login and at every privilege change; idle + absolute timeouts.
+- CSRF: synchronizer token on every state-changing form/request when cookie auth is used; verify `Origin`/`Referer` as defense in depth. (Bearer-token APIs without cookies are not CSRF-exposed the same way — say so explicitly in the threat model rather than cargo-culting tokens.)
+- XSS: framework auto-escaping everywhere; a written inventory of every escape hatch (raw-HTML rendering, `innerHTML`-equivalents, markdown renderers) — each one needs sanitization (e.g. DOMPurify-class) and a named owner. CSP header deployed, tightened from report-only to enforcing.
+- Security headers: `X-Content-Type-Options: nosniff`, frame protection (`frame-ancestors`), `Referrer-Policy`, HSTS on HTTPS.
+- Password storage: Argon2id/bcrypt-class hashing; login rate limiting + breached-password screening.
+
+Mandatory tests:
+- [ ] State-changing request without CSRF token is rejected
+- [ ] Session ID changes after login; old session is dead
+- [ ] Stored + reflected XSS payloads in every free-text field render inert
+- [ ] Cookie flags verified in a real response (not just config)
+- [ ] Logout actually invalidates the session server-side
+
+## (b) REST API Service
+
+Top threats: BOLA/IDOR (the #1 API risk), mass assignment, excessive data exposure, missing rate limits, JWT misuse.
+
+Controls:
+- **Authorization per object, per request:** every handler checks "does THIS identity own/can access THIS object" — never rely on the client sending only its own IDs. Centralize the check; a per-endpoint hand-rolled check will be forgotten on endpoint #47.
+- **Allowlist input fields** on create/update (DTOs), never bind request bodies directly to ORM models — that is mass assignment (a client adding `"role":"admin"` to a profile update).
+- **Response shaping:** return only the fields the client needs; a user object that includes password hashes, internal flags, or other users' data "because the ORM returned it" is excessive exposure.
+- **JWT pitfalls:** verify signature AND `alg` (reject `none` and algorithm confusion), check `exp`/`iss`/`aud`, prefer short-lived access tokens + rotating refresh tokens, never store secrets or PII in the payload (it is encoded, not encrypted), have a revocation story for logout/compromise.
+- Rate limiting per identity AND per IP on auth and expensive endpoints; pagination caps on every list endpoint; request size limits.
+
+Mandatory tests:
+- [ ] User A requests/mutates User B's object by ID → 403/404 (run for EVERY resource type)
+- [ ] Update request with an extra privileged field (`role`, `isAdmin`, `balance`) → field ignored or rejected
+- [ ] Expired token, tampered-payload token, and `alg:none` token → all rejected
+- [ ] List endpoint without pagination params → capped default, not the whole table
+- [ ] Auth endpoint hammered at 10× the limit → throttled, legitimate user unaffected after window
+
+## (c) Mobile App (iOS/Android)
+
+Top threats: secrets/data extracted from the device, MITM on hostile networks, deep-link hijacking, token theft from insecure storage.
+
+Controls:
+- **Secrets:** no API keys with real privilege in the binary — anything shipped in the app WILL be extracted. Backend must authenticate the user, not the app binary. (App-attestation services raise the bar; they are not a trust root.)
+- **Storage:** tokens/credentials only in platform secure storage (Keychain/Keystore); never in plain preferences, files, or logs. Sensitive data minimized on-device; remote-wipe/session-revocation path exists.
+- **Transport:** TLS everywhere; certificate pinning is a trade-off — it stops casual MITM but breaks under cert rotation and hostile corporate proxies; pin only for high-value APIs, with a backup pin and a rotation plan, or skip pinning and rely on system TLS + short-lived tokens. Record the decision and its reason.
+- **Deep links:** verified app links (domain-verified) for anything sensitive; treat every incoming deep-link parameter as hostile input (it can be sent by any other app); never perform privileged actions from a deep link without in-app confirmation + auth.
+- **Rooted/jailbroken devices:** detect if the risk justifies it, respond proportionately (warn, restrict sensitive features) — do not pretend detection is prevention; server-side checks remain the real control.
+- Release hygiene: debug logging off in production builds, no test backdoors/accounts, obfuscation as speed-bump only.
+
+Mandatory tests:
+- [ ] Token/credential search in app storage and logs after a full session → nothing sensitive in plaintext
+- [ ] Deep link from an external source with hostile parameters → validated, no privileged action without auth
+- [ ] API calls through a MITM proxy with a user-installed CA → behavior matches the documented pinning decision
+- [ ] Session revoked server-side → app is forced to re-authenticate
+
+## (d) SaaS Multi-Tenant
+
+Top threats: cross-tenant data leakage (the existential one), tenant-admin privilege confusion, noisy-neighbor abuse, leakage through shared caches/search/exports.
+
+Controls:
+- **Tenant ID is derived from the authenticated identity server-side, never accepted from the client** (not from a header, query param, or body field the client controls).
+- Enforce isolation at the data layer: tenant-scoped queries by construction (ORM scopes / row-level security), so a forgotten `WHERE` cannot leak. Application-level filtering alone is a matter of time.
+- Every shared subsystem is a leak surface and must be tenant-aware: caches (tenant in the cache key), full-text search indexes, file storage paths, background jobs, analytics exports, support/admin tooling, error messages (don't confirm another tenant's object exists).
+- Role model is two-dimensional: platform roles vs. tenant roles. A tenant admin is NOT a platform admin — test the boundary explicitly.
+- Per-tenant rate/storage quotas; tenant offboarding includes verified data deletion.
+
+Mandatory tests:
+- [ ] Tenant A token + Tenant B object IDs → denied on every resource type (automate this as a regression suite, not a one-off)
+- [ ] Tenant B's data absent from Tenant A's search results, exports, autocomplete, and cache-warm responses
+- [ ] Tenant admin attempts platform-admin endpoints → denied
+- [ ] Background job/export for Tenant A contains zero Tenant B records (row-count diff against fixtures)
+
+## (e) Payments / E-Commerce
+
+Top threats: price/amount tampering, payment-state spoofing via webhooks, card-data exposure expanding PCI scope, refund/coupon abuse.
+
+Controls:
+- **Never touch raw card data.** Use the PSP's hosted fields/redirect/checkout so card numbers never transit your servers — this keeps you in the smallest PCI scope (SAQ-A class). The moment card data touches your backend, scope and obligations explode.
+- **Prices are computed server-side from the catalog, always.** Any amount, discount, or total sent by the client is display data, never billing input.
+- **Webhooks:** verify the PSP signature on every event, using the raw request body; process idempotently (events arrive duplicated and out of order); the webhook — not the browser's "success" redirect — is the only source of truth for payment state.
+- Order/payment state machine enforced server-side (no skipping from `created` to `paid` without a verified PSP event).
+- Refunds, coupons, gift cards: single-use and balance checks enforced transactionally server-side; admin refund actions are permission-gated and audit-logged.
+- Reconciliation job: internal orders vs. PSP records, discrepancies alert a human.
+
+Mandatory tests:
+- [ ] Checkout with a tampered client-side price/quantity/discount → server charges the catalog-correct amount
+- [ ] Webhook with a forged/invalid signature → rejected and logged
+- [ ] Same webhook delivered twice → processed once (idempotency proof)
+- [ ] Browser "payment success" return WITHOUT a webhook → order is NOT marked paid
+- [ ] Coupon applied twice / beyond its limit, concurrently → enforced once
+
+## (f) File-Upload-Heavy Apps
+
+Top threats: malicious file execution, type confusion, stored XSS via served files, path traversal, storage bucket exposure.
+
+Controls:
+- **Validate by content, not by name:** check magic bytes/real MIME type against an allowlist of types the business needs; extension and client-declared type are untrusted decoration.
+- **Never execute or serve uploads from the app origin:** store outside the web root / in a separate bucket+domain, serve with `Content-Disposition: attachment` and `nosniff`; an uploaded HTML/SVG served inline from your domain is stored XSS with extra steps (SVG is XML — it can carry script).
+- **Scan:** antivirus/malware scanning in the pipeline before a file becomes downloadable by others; unscanned files are quarantined, not "probably fine".
+- **Filenames:** generate server-side random names; never use the user's filename as a storage path (traversal `../../`, overwrites, unicode tricks). Size limits per file and per user; image re-encoding (strip metadata/EXIF, defuse polyglot files) where images are the use case.
+- **Access control on download:** files are objects — downloading requires the same ownership/permission check as any API object (see BOLA, section b); "unguessable URL" alone is not authorization for sensitive files.
+
+Mandatory tests:
+- [ ] Executable/script file renamed to `.jpg` → rejected by content inspection
+- [ ] HTML/SVG upload later served → cannot execute script in the app origin
+- [ ] Filename with `../` and absolute paths → stored under a generated name, nothing written outside the upload area
+- [ ] Another user's file URL with your session → denied (unless explicitly shared)
+- [ ] Oversized file and upload flood → rejected/throttled without affecting other users
+
+## (g) Realtime / Chat
+
+Top threats: reading or injecting into conversations you are not in, presence/activity privacy leaks, spam/abuse at machine speed, message spoofing.
+
+Controls:
+- **Authorize subscriptions, not just sends:** joining a room/channel/topic is an authorization event — the server checks membership at subscribe time AND when membership changes mid-connection (kick = server closes/forces re-subscribe).
+- Every message is validated and attributed server-side; the sender identity comes from the connection's auth, never from a field in the message payload.
+- **Presence is personal data:** who is online/typing/last-seen follows the product's privacy settings and is never broadcast beyond the audience that can see the conversation itself.
+- Rate limits per user per room (messages, joins, reactions), plus slow-mode/flood controls and a report/block path that actually severs delivery (block = no messages delivered either way, enforced server-side).
+- History/backfill endpoints apply the same membership check as live delivery — the classic leak is the REST history API, not the socket.
+
+Mandatory tests:
+- [ ] Non-member subscribes to a private room → denied, receives nothing, including backlog
+- [ ] Removed member's open connection stops receiving within the documented window
+- [ ] Message with a spoofed sender field → attributed to the real connection identity or rejected
+- [ ] Blocked user sends → nothing delivered to the blocker, via socket AND history
+- [ ] Message flood at 10× normal rate → throttled without dropping other users' messages
+
+## (h) Admin / Internal Tools
+
+Top threats: the "internal = safe" fallacy (VPN ≠ authorization), one over-privileged shared account, unlogged destructive actions, CSRF/lateral movement from a phished employee browser.
+
+Controls:
+- **Internal tools get the full treatment:** real per-person authentication (SSO), role-based authorization, and the same input validation as public apps. Attackers who reach the internal network — or ride an employee's browser — inherit everything the tool skips.
+- **No shared accounts.** Every action attributable to a person; break-glass/emergency access exists but is individually issued, time-boxed, and alarmed on use.
+- **Audit log:** who did what to which object, when, from where — append-only, retained, and reviewed. Destructive/bulk actions (delete, refund, export-all, permission grants) require elevated role + a confirmation that shows scope ("You are about to export 48,000 records").
+- Data exports are the exfiltration path: permission-gate them, log them, watermark/notify for large ones.
+- Admin surfaces are excluded from public indexes/routes where possible, but obscurity is a bonus layer, never the control.
+
+Mandatory tests:
+- [ ] Low-privilege staff role attempts a destructive/bulk action → denied AND the attempt is in the audit log
+- [ ] Every privileged action in a scripted session appears in the audit log with actor, object, timestamp
+- [ ] Break-glass account use triggers its alert/logging path
+- [ ] Session of a deactivated employee → access denied everywhere, including existing sessions
+
+## Cross-Type: Secrets & Logging Hygiene (applies to every section above)
+
+| Rule | Detail |
+|---|---|
+| Secrets live in a manager/env, never in code | Repo history is forever; a committed secret is a rotated secret — rotation is part of the fix, deletion is not |
+| One secret per environment | Dev/staging/prod never share credentials, tokens, or signing keys |
+| Least privilege per secret | The app's DB user cannot drop tables it never drops; the CI token cannot do what CI never does |
+| Logs never contain | Passwords, full tokens, session IDs, card data, secrets, auth headers — log identifiers (user ID, request ID), not credentials |
+| PII in logs is minimized and purposeful | If support never uses it, it does not get logged; log retention is defined, not infinite |
+| Errors shown to users are generic | Stack traces, SQL errors, and internal paths stay server-side; detail goes to logs, a reference ID goes to the user |
+| Signing/verification keys are rotatable | Webhook secrets, JWT keys, and API keys all have a documented rotation path that does not require a code change |
+| Dependency & token hygiene in CI | Pinned actions/dependencies, minimal token permissions per job, secrets masked in CI output |
+
+## Depth Calibration — How Far to Go per Type
+
+Use the ASVS-style depth from the playbook, driven by the worst data the system touches:
+
+| System profile | Minimum depth | Notes |
+|---|---|---|
+| Public content site, no accounts | Baseline hygiene: headers, TLS, dependency patching | Sections (a) controls still apply to any admin/login surface |
+| Accounts + personal data | Standard product depth: full permission matrix, BOLA suite, session rules | The default for most features in this repo's workflow |
+| Multi-tenant, payments, health/financial data, admin tooling over production data | Highest depth: isolation test suites, audit-log review, webhook/idempotency proofs, incident path defined before launch | Depth is set by data sensitivity, never by team size or deadline |
+| Anything internet-facing with file uploads from strangers | Treat as high depth for the upload pipeline specifically | The rest of the app may be standard; the pipeline is not |
+
+When two profiles collide (e.g. a small team shipping payments), the higher depth wins. Record the chosen depth and its reason in `04-security.md` so QA knows how hard to push.
+
+
+---
+
 # ===== SKILL — skills/solution-architect/SKILL.md =====
 
 ---
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Solution Architect — Gate 2
@@ -4097,6 +5362,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 12. References
 
 - `references/playbook.md` — C4 guidance per level and when to stop, the ADR writing frame, the API contract rule set (errors/versioning/pagination/idempotency/time), and data modeling & migration safety in detail.
+- `references/architecture-patterns.md` — read when choosing or revisiting system structure: the pattern catalog (monolith → microservices, BFF, event-driven, CQRS-lite) with use/avoid/cost, integration and data patterns, auth architecture options, multi-tenancy models, scalability levers in cost order, the weighted technology-selection matrix, and fitness checks for later gates.
 - `templates/API-CONTRACT.template.md` — the official contract structure.
 - `templates/ADR.template.md` — the official ADR structure.
 - `templates/BA.template.md` / the task's `01-ba.md` — the business input, for traceability cross-checks.
@@ -4105,7 +5371,168 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/solution-architect/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/solution-architect/references/architecture-patterns.md =====
+
+# Architecture Patterns — Catalog, Trade-offs, and Selection
+
+> Companion to `references/playbook.md` (C4 levels, ADR guidance, API contract rules, data & migration safety).
+> This file is the pattern catalog: what to choose, when, and at what cost — plus the selection method
+> and the checks later roles use to verify the architecture actually held.
+
+## 1. Structural patterns
+
+| Pattern | Use when | Avoid when | Cost |
+|---|---|---|---|
+| **Layered monolith** (UI → service → data in one deployable) | Small team, one product, unclear domain boundaries, speed matters most | Independent scaling of parts is a proven need today | Lowest build/ops cost; risk: layers erode into a big ball of mud without module discipline |
+| **Modular monolith** (one deployable, hard module boundaries, modules talk via interfaces/events only) | Default for most growing products: real domain structure, team of 2–15, future extraction possible | The organization cannot enforce boundaries (no review discipline) | Slightly more design effort than layered; buys the option to extract a module later at known seams |
+| **Microservices** | Independent deploy/scale/team-ownership needs are **demonstrated**, different parts genuinely evolve at different speeds, org has platform capacity | As a starting point; small teams; unclear domain; no observability/CI maturity | Highest: distributed failure modes, eventual consistency, deployment & debugging overhead, data ownership splits |
+| **Serverless functions** | Spiky/event workloads, glue between services, low steady traffic, per-invocation cost model fits | Long-running work, strict latency (cold starts), deep local state, vendor lock-in unacceptable | Cheap at low volume, expensive at sustained volume; debugging and local testing are weaker |
+| **BFF (Backend for Frontend)** | Two+ clients (web/mobile/TV) with genuinely different data shapes; client teams blocked by generic API shape | One client, or differences are cosmetic (solve with query params/fields) | One more deployable per client; risk of business logic leaking into the BFF — keep it shaping/aggregation only |
+| **Event-driven** | Loose coupling needed, reactions to facts ("order placed") fan out, audit trail valuable, load is bursty | The flow is fundamentally request/response and ordering is strict; team cannot operate brokers/dead-letter handling | Async debugging, ordering & duplicate-delivery handling, eventual consistency in UIs |
+| **CQRS-lite** (separate read model, same service/DB) | Read patterns diverge hard from write patterns (complex reporting on transactional data) | Ordinary CRUD — a few indexed queries solve it | A read model to keep in sync (lag must be designed for); full CQRS with separate stores is a last resort, not a default |
+
+**Why the default is NOT microservices.** Microservices trade code complexity for organizational complexity: network failure modes, distributed transactions, versioned contracts between every pair, per-service pipelines and observability. A monolith's failure modes are visible in one codebase and one deploy. The burden of proof sits on distribution: name the concrete force (independent scaling measured, team contention measured, compliance isolation required) — if the force is hypothetical ("we might need to scale"), build a modular monolith whose module seams are exactly where services would later split. Extract when the force is real; the seams make it a refactor, not a rewrite.
+
+## 2. Integration patterns
+
+**Sync vs. async decision table** — decide per interaction, not per system:
+
+| Question | Points to sync (request/response) | Points to async (queue/event) |
+|---|---|---|
+| Does the caller need the result to continue? | Yes — user is waiting on it | No — fire-and-confirm is enough |
+| Must failure be known immediately? | Yes (payment authorization) | Tolerable to learn later (email, indexing) |
+| Is the downstream slow or unreliable? | It is fast and owned by us | Third-party, bursty, or flaky — buffer it |
+| Ordering strict end-to-end? | Yes | Per-entity ordering suffices, or none needed |
+| Volume pattern | Steady | Spiky — a queue absorbs the spike |
+
+- **Queues** when: work must survive downstream outages, spikes need absorbing, or retries are natural. Always design: max retries, dead-letter queue + who inspects it, idempotent consumers (delivery is at-least-once in practice).
+- **Webhooks** when: a third party must notify you of events. Always design: signature verification, idempotency on event ID, respond fast and process async, a reconciliation job for the notifications that never arrived.
+- **Polling** when: the other side offers no push mechanism, or volumes are tiny. Poll with backoff, store a cursor/watermark, and treat polling as a deliberate cost (rate limits), not a default. Prefer push; poll as the fallback with a stated interval and owner.
+
+## 3. Data patterns
+
+- **Caching layers** — cache at the cheapest layer that solves the problem, in order: in-process memory (fastest, per-instance) → shared cache (Redis-class) → CDN/edge for static and public content → database query cache/materialized views. **Invalidation strategies**, pick per data type: TTL (staleness tolerable, simplest), write-through/invalidate-on-write (correctness matters, you own the writes), event-driven invalidation (multiple writers), cache-aside with versioned keys (safe default for mixed cases). Rule: every cache entry in the design names its invalidation strategy and its acceptable staleness — "we'll cache it" without both is a bug scheduled for later (see the classic stale-slot failure: a write path that forgot to invalidate).
+- **Read replicas** — when read load measurably hurts the primary or reporting queries contend with transactions. Design for replication lag: route reads that must be fresh (read-your-own-write) to the primary; show the lag budget in the design.
+- **Soft delete** — when recovery, audit, or legal holds matter. Costs: every query must filter, unique constraints need care (deleted rows still occupy values), and "deleted" must be defined for exports/backups. Hard delete when regulation demands erasure or the data has no recovery value — and record which rule applies per entity.
+- **Audit tables** — append-only record of who/what/when for sensitive entities (money, permissions, health). Write audit rows in the same transaction as the change; never update or delete audit rows; decide retention up front.
+- **Optimistic locking** — a version column checked on update ("UPDATE … WHERE version = ?"); a mismatch returns 409 and the user re-loads. Use for human-edited records with low contention. Pessimistic locks only for short, high-contention critical sections (inventory decrements) — and prefer atomic conditional updates at the DB level over application locks.
+
+## 4. Auth architecture options
+
+| Option | Shape | Use when | Watch out for |
+|---|---|---|---|
+| **Server session** (opaque ID in an HttpOnly cookie) | Server stores session state; instant revocation | Classic web apps, one backend, revocation matters | Needs shared session store when scaled horizontally; CSRF protection required |
+| **JWT access token** (short-lived, stateless) | Client holds a signed token; APIs verify without a lookup | Multiple services/APIs verifying independently | Revocation is hard before expiry — keep lifetimes short, pair with a refresh token, plan a denylist only if truly needed |
+| **OAuth 2.0 / OIDC** (delegate to an IdP) | Authorization-code flow (+PKCE for public clients) for login via Google/Microsoft/etc. or your own IdP | Social/enterprise login, SSO, not storing passwords yourself | Never use implicit flow; validate issuer/audience; account-linking rules (same email, two providers) are a BA question, not a library default |
+
+**Where tokens live:** browser apps → HttpOnly, Secure, SameSite cookies for refresh/session (not `localStorage` — any XSS reads it); access tokens in memory for SPAs if tokens are unavoidable; mobile → OS secure storage (Keychain/Keystore). State the choice and its XSS/CSRF consequence in the design — "we use JWT" without a storage decision is an unfinished design.
+
+## 5. Multi-tenancy models compared
+
+| Model | Isolation | Cost shape | Use when |
+|---|---|---|---|
+| **Shared schema + tenant_id column** | Logical only — one wrong query leaks across tenants | Cheapest; one schema to migrate | Default for most SaaS; requires tenant scoping enforced in the data layer + tests (Gate 4 owns the leak tests) |
+| **Schema per tenant** (one DB) | Medium — misrouting harder, migrations fan out | Medium; migration × N tenants | Tenants need some isolation or per-tenant restore, counts are modest |
+| **Database per tenant** | Strongest — blast radius is one tenant | Highest ops cost; connection/fleet management | Regulated data, enterprise contracts, very large tenants |
+
+Decide by the strongest tenant's requirement, not the average: one regulated tenant forces the model (or a hybrid: default tenants shared, regulated tenants isolated — with the routing rule written down).
+
+## 6. Scalability levers — in order of cost
+
+Pull levers in this order; measure before and after each one; stop when targets hold.
+1. **Fix the query** — indexes, N+1 elimination, payload trimming. Cheapest by far; most "scale problems" die here.
+2. **Cache** — per §3, with a named invalidation strategy.
+3. **Scale the app tier vertically, then horizontally** — stateless app servers are the easy axis (which is why session/state placement in §4 matters).
+4. **Async offload** — move non-critical work (emails, reports, indexing) to queues.
+5. **Read replicas / read models** — split read pressure from the write primary.
+6. **Partition/shard data** — expensive and hard to reverse; only with measured need and a shard key proven by access patterns.
+7. **Split services** — the last lever, pulled for organizational or isolation forces (§1), not as a performance first resort.
+
+## 7. Technology selection method
+
+Never select by familiarity or hype alone. Run a criteria matrix:
+1. List **hard constraints** first (existing stack, hosting, licenses, team skills, compliance) — a candidate failing a hard constraint is out regardless of score.
+2. Score the survivors 1–5 on weighted criteria. Weights are set per project *before* scoring, and recorded.
+3. Score with evidence: a spike/prototype for any criterion scored on a claim ("fast", "easy") that the decision depends on.
+
+**Worked example** — choosing a job queue (weights: fit 3, ops burden 3, team familiarity 2, cost 1, ecosystem 1):
+
+| Candidate | Fit ×3 | Ops ×3 | Familiarity ×2 | Cost ×1 | Ecosystem ×1 | Total |
+|---|---|---|---|---|---|---|
+| Managed cloud queue | 5→15 | 5→15 | 3→6 | 3→3 | 4→4 | **43** |
+| Self-hosted broker (RabbitMQ-class) | 5→15 | 2→6 | 4→8 | 4→4 | 5→5 | 38 |
+| DB-backed job table | 3→9 | 5→15 | 5→10 | 5→5 | 2→2 | 41 |
+
+Managed queue wins narrowly; the matrix also shows the honest runner-up (the DB-backed table — nearly as good, zero new infrastructure), which the ADR records as the fallback if managed costs grow. Record the matrix inside the ADR: a decision whose alternatives and scores are visible can be revisited rationally; a bare "we chose X" cannot.
+
+## 8. Architecture fitness checks — how later roles verify it held
+
+Architecture decays silently unless each later gate checks its slice:
+- **Developer (Gate 5):** module boundaries respected — no cross-module reach-around imports; contract conformance tests run against the signed API contract; new dependencies appear in the dev notes with a reason.
+- **Code Review (Gate 5b):** diffs checked against the ADR list — any decision contradicted by code is either fixed or escalated into a superseding ADR; never let code silently overrule a recorded decision.
+- **Integration (Gate 6):** the deployed shape matches the C4 diagram (components, data stores, external calls) — diagram updated in the same task if reality legitimately changed; cache invalidation paths exercised, not just happy-path reads.
+- **QA (Gate 7):** the NFRs the architecture promised become tests — the performance target measured, the forbidden state transitions attempted, tenant-isolation cases run, token-storage rules verified in the built client.
+- **Release (Gate 8):** rollback actually exercises the architecture's assumptions (data migrations reversible or compensated, feature flags present where the design promised them).
+
+Any fitness check that fails follows the standard rule: stop, Failure Report, fix at the owning role — an architecture quietly not holding is a defect like any other, and the ADR/diagram is updated in the same change whenever the fix alters the design.
+
+## 9. API style selection
+
+| Style | Use when | Avoid when | Cost / note |
+|---|---|---|---|
+| **REST (resource-oriented)** | Default for CRUD-shaped domains; cacheability and tooling maturity matter | Clients consistently need many resources per screen (over-fetching churn) | Verbose for graph-shaped queries; versioning discipline required (see playbook) |
+| **GraphQL** | Multiple client types with divergent, evolving data needs; a schema team exists to govern it | Simple CRUD; strict HTTP caching is a core lever; team cannot operate query-cost controls | Powerful but moves complexity server-side: query depth/cost limits, persisted queries, and authorization per field are mandatory design work |
+| **RPC-style (action endpoints / tRPC-class)** | Internal APIs between your own services/apps; actions don't map to resources ("cancel", "re-price") | Public APIs consumed by third parties who expect resource conventions | Honest about actions; weaker standardization and external tooling |
+| **Events only (no API)** | The interaction is genuinely one-way notification | Any caller needs confirmation, a result, or an error | Pair with a status/read endpoint — pure fire-and-forget hides failures from users |
+
+Mixed styles are normal (REST for resources, RPC for actions, events for notifications) — the contract must say which style governs which surface, per endpoint, not leave it to each developer's taste.
+
+## 10. Consistency and failure patterns for distributed data
+
+- **Transactional outbox** — when a state change and an event publication must succeed or fail together: write the event to an outbox table in the same DB transaction, publish from there. This is the default answer to "the order saved but the event never fired". Cost: a publisher process and deduplication downstream.
+- **Saga (compensating actions)** — multi-step processes spanning services/data stores: each step has a compensating action ("release reservation" compensates "reserve stock"). Prefer choreography for simple flows, orchestration when the flow needs visibility/control. Never reach for distributed two-phase commit across services — design compensation instead.
+- **Idempotency everywhere money or inventory moves** — client-supplied idempotency keys on writes, unique constraints at the DB as the backstop, and consumers that tolerate duplicate delivery. (Contract-level rules are in the playbook; this is the architectural consequence.)
+- **Retry discipline** — retries only for idempotent operations, exponential backoff with jitter, a stated max, and a circuit breaker when a dependency is down so retries don't become a self-inflicted outage. Every retry policy in the design names its numbers; "we retry on failure" is not a policy.
+- **Timeouts are architecture, not tuning** — every cross-boundary call gets a timeout budget derived from the user-facing budget (e.g. 2 s total → API 800 ms → DB 300 ms). A call without a timeout is an unbounded wait that will eventually hold threads/connections hostage.
+
+## 11. Observability as an architectural requirement
+
+Designs must state, not imply, how the running system will be understood:
+- **Structured logs** with a correlation/request ID propagated across every boundary in §9–§10 — without it, distributed debugging is guesswork.
+- **Metrics that map to the NFRs** — the performance and error-rate targets from the spec each name the metric that proves them in production; if no metric exists, the NFR is unverifiable after release.
+- **Health/readiness endpoints** per deployable, distinguishing "process is up" from "dependencies are reachable".
+- **Audit vs. debug separation** — audit records (§3) are business evidence with retention rules; debug logs are operational and short-lived. Never let one substitute for the other.
+- **Alerting ownership** — each critical metric names who gets paged and the runbook's first step; an alert with no owner is noise the design created.
+
+## 12. Pattern selection — the 60-second path
+
+When a structural decision is needed fast, walk these questions in order and stop at the first decisive answer:
+1. Is there a **demonstrated** force for distribution (measured scaling need, measured team contention, compliance isolation)? No → modular monolith (or layered, if tiny). Yes → continue.
+2. Is the force about **one hot module** only? Yes → extract that module as a service; keep the monolith for the rest. No → continue.
+3. Is the workload **event-shaped and bursty** with tolerant latency? Yes → serverless functions or event-driven components for those flows. No → conventional services.
+4. Do **multiple dissimilar clients** drive the API shape? Yes → add a BFF per client class. No → one API.
+5. Do **reads diverge hard** from writes? Yes → CQRS-lite read model. No → single model.
+Record the walk (question, answer, evidence) in the ADR — the path is the rationale, and it tells a future architect exactly which changed fact should reopen the decision.
+
+## 13. Architecture failure modes — the pre-mortem table
+
+Before finalizing any design, scan it against the failure modes that most often invalidate architectures after launch. For each row: if the design has no answer, the design is not finished.
+
+| Failure mode | How it shows up | Design-time counter |
+|---|---|---|
+| Distributed monolith | Services that must deploy together; a change ripples across repos | Module/service boundaries drawn at domain seams (§12 Q1–Q2); contract tests per boundary |
+| Shared-database coupling | Two services reading/writing the same tables directly | One writer per table; cross-service reads go through APIs/events or a named read model |
+| Chatty boundaries | A screen needs 40 calls; latency multiplies | Aggregate at the BFF/API layer; batch endpoints; measure calls per user action in the design |
+| The god service / god table | One component owns everything; every change queues behind it | Split by domain capability; the C4 diagram makes the imbalance visible — look at it |
+| Premature distribution | Ops burden of §1 paid before any force exists | The §12 walk, answered with evidence, recorded in the ADR |
+| Consistency surprises | Users see stale or contradictory data; "it saved but shows old value" | Per-flow consistency stated explicitly (strong vs. eventual + where the user notices), cache staleness budgets (§3) |
+| Vendor gravity | A provider's limits/pricing silently become the architecture's limits | Hard-constraint list in the selection matrix (§7) names exit cost for each managed dependency |
+| Unowned operations | Nobody can answer "is it healthy, and who acts when it isn't" | §11 observability + alerting ownership completed before the gate passes |
+
+
+---
+
+# ===== SKILL REFERENCE — skills/solution-architect/references/playbook.md =====
 
 # Playbook — Solution Architect (deep reference)
 
@@ -4226,7 +5653,7 @@ Rule: an NFR without a number is recorded as an `[ASSUMPTION]` together with the
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # UI/UX Design — Gate 3
@@ -4517,6 +5944,7 @@ QA later uses your design as the visual reference when verifying the built UI.
 
 - `references/playbook.md` — the deep UI/UX playbook (the 3-tier source system, the 5-state spec, the WCAG
   table, the research method, the audit checklist, the anti-AI-slop list).
+- `references/design-systems.md` — read when creating, extending, or auditing a design system: token architecture, typography/spacing systems, the 12-part component spec, theming & dark mode, icon construction, motion tokens, design-to-code handoff, and design QA tolerances.
 - `templates/` in this repo — the SPEC/BA templates that define your inputs; the `03-design.md` output
   follows the structure in section 7.
 - `skills-index/SKILLS-INDEX.md` — the curated external skills with install commands and safety warnings.
@@ -4524,7 +5952,190 @@ QA later uses your design as the visual reference when verifying the built UI.
 
 ---
 
-# ===== SKILL PLAYBOOK — skills/ui-ux-design/references/playbook.md =====
+# ===== SKILL REFERENCE — skills/ui-ux-design/references/design-systems.md =====
+
+# Design Systems — Deep Dive
+
+> Read when: the task creates, extends, or audits a design system, or a design decision needs a rule instead of an opinion.
+> Companion: `playbook.md` covers research, states, and audits; this file covers the system itself — tokens, type, space, components, theming, motion, and handoff.
+
+## 1. Token Architecture — Three Layers, No Exceptions
+
+Design tokens are the single source of truth for visual decisions. Raw values (hex, px) may exist in exactly ONE layer.
+
+| Layer | Holds | Example names | Who may use it |
+|---|---|---|---|
+| 1. Primitive (global) | Raw values, no meaning | `color.blue.500`, `space.4`, `radius.md` | Only Layer 2 |
+| 2. Semantic (alias) | Meaning, mapped to primitives | `color.action.primary`, `color.surface.raised`, `text.body.size` | Components, screens |
+| 3. Component | Per-component decisions, mapped to semantic | `button.primary.bg`, `card.padding`, `input.border.focus` | That component only |
+
+Rules:
+- **Never style a screen from Layer 1.** A screen full of `blue.500` cannot be rethemed, rebranded, or dark-moded.
+- **Semantic names describe role, not appearance.** `color.text.muted` survives a palette change; `color.text.gray` does not.
+- **Naming pattern:** `category.property.variant.state` — lowercase, dot-separated, no abbreviations that need a glossary (`bg` and `fg` are acceptable only if the whole team uses them consistently).
+- One token, one job. If `color.action.primary` is also used for links, charts, and selection, it is three tokens pretending to be one — split them before the first rebrand forces you to.
+
+Sample token table (excerpt):
+
+| Token | Layer | Light value | Dark value |
+|---|---|---|---|
+| `color.blue.500` | Primitive | `#2563EB` | `#2563EB` |
+| `color.action.primary` | Semantic | `color.blue.500` | `color.blue.400` |
+| `color.surface.base` | Semantic | `color.neutral.0` | `color.neutral.950` |
+| `color.text.primary` | Semantic | `color.neutral.900` | `color.neutral.50` |
+| `button.primary.bg` | Component | `color.action.primary` | `color.action.primary` |
+| `space.inset.card` | Component | `space.4` (16px) | same |
+
+Worked micro-example — one component token set (Button, primary variant):
+
+| Component token | Maps to | Notes |
+|---|---|---|
+| `button.primary.bg` | `color.action.primary` | Hover uses `color.action.primary.hover`, a separate semantic token — never a manually darkened value |
+| `button.primary.fg` | `color.text.on-action` | Guaranteed-contrast foreground for action surfaces, checked as a pair in both themes |
+| `button.primary.radius` | `radius.md` | Shared with inputs so adjacent controls align visually |
+| `button.primary.padding-inline` | `space.4` | Size variants override this one token, nothing else |
+| `button.primary.font` | `text.body` + weight 600 | Buttons do not get their own typeface rules |
+
+Decision rules when naming gets argued:
+
+| Situation | Rule |
+|---|---|
+| Two screens need "almost the same" color | Same semantic token if the ROLE is the same; new token only if the role differs |
+| A value is used in exactly one place | It still gets a token if it expresses a role (error, success); one-off decoration is a smell |
+| Marketing wants a one-off campaign color | Primitive token + a campaign-scoped semantic token with an expiry review date (Section 10) |
+| A platform forces a different value (iOS vs. Android) | Same semantic token, per-platform primitive mapping — the meaning stays unified |
+
+## 2. Typography System
+
+- **One scale ratio, applied mechanically.** Pick a ratio (1.25 major third for dense product UI, 1.333–1.5 for marketing/editorial) and derive every size from a base of 16px. Hand-picked sizes are how systems rot.
+- **Line-height by role:** headings 1.1–1.25, body 1.45–1.6, captions/labels 1.3–1.4. Line-height is unitless in code (multiplier), never a fixed px.
+- **Measure (line length):** 45–75 characters for body text. Wider text gets multi-column or a max-width container — never full-bleed paragraphs.
+- **Tabular numbers** (`font-variant-numeric: tabular-nums`) are mandatory anywhere numbers align vertically or update live: tables, prices, timers, stats. Proportional figures in a price column are a defect.
+- **Weights:** ship at most 3 (regular, medium/semibold, bold). A fourth weight is a new token decision, not a local choice.
+- **Never set type in px in product code** — rem/em so user font-size settings work; that is an accessibility requirement, not a preference.
+
+Sample type scale (ratio 1.25, base 16):
+
+| Role token | Size | Line-height | Weight | Use |
+|---|---|---|---|---|
+| `text.display` | 39px | 1.15 | 700 | Hero headline only |
+| `text.h1` | 31px | 1.2 | 700 | Page title |
+| `text.h2` | 25px | 1.25 | 600 | Section title |
+| `text.h3` | 20px | 1.3 | 600 | Card/group title |
+| `text.body` | 16px | 1.55 | 400 | Default reading text |
+| `text.body-sm` | 14px | 1.5 | 400 | Secondary text, dense lists |
+| `text.caption` | 12.8px | 1.4 | 500 | Labels, meta, timestamps |
+
+## 3. Spacing & Layout Grid
+
+- **Base unit 4px; rhythm on 8.** All spacing tokens are multiples of 4: `space.1`=4, `space.2`=8, `space.3`=12, `space.4`=16, `space.6`=24, `space.8`=32, `space.12`=48, `space.16`=64. Values like 13px or 22px in a spec mean the layout was eyeballed — send it back.
+- **Inset vs. stack vs. inline:** name spacing by relationship (padding inside a container = inset; vertical gap between blocks = stack; horizontal gap = inline). Same numbers, clearer intent.
+- **Containers:** define max content widths per content type (reading ~720px, app shell ~1280px, data-dense ~1440px or fluid with a cap) — "full width" is not a layout decision.
+- **Grid:** 12 columns on desktop, 4 on mobile, gutters = `space.6` desktop / `space.4` mobile, margins = gutter. Components span columns; they never invent their own widths.
+- **Breakpoint strategy:** content-driven, not device-driven. Add a breakpoint where the layout actually breaks. Name them by range (`compact`, `medium`, `expanded`), never by device (`iphone`, `ipad`) — devices change, ranges don't.
+
+## 4. Component Specification Anatomy — The 12 Required Parts
+
+A component is not specified until all 12 exist. A spec missing any row is incomplete and Dev will (correctly) improvise the missing parts.
+
+| # | Part | Must state |
+|---|---|---|
+| 1 | Purpose & non-purpose | What it is for, and what it must NOT be used for |
+| 2 | Anatomy | Named parts (container, label, icon slot, helper text…) with a diagram or labelled list |
+| 3 | Variants | Each variant and the rule for choosing it (primary vs. secondary is a decision rule, not taste) |
+| 4 | States | Default, hover, focus-visible, active, disabled, loading, error — every state the variant can be in |
+| 5 | Sizes | Size tokens and when each applies |
+| 6 | Props/API | Name, type, default, required? — written so a developer can build the interface without asking |
+| 7 | Content rules | Max label length, truncation behavior, empty/missing content behavior, localization expansion allowance (+30% length) |
+| 8 | Accessibility | Role/element semantics, focus order, keyboard interaction, target size (≥44px touch, ≥24px pointer minimum), contrast of every state |
+| 9 | Motion | Which transitions, which motion tokens (Section 7), what happens under reduced-motion |
+| 10 | Responsive behavior | What changes at each range: stack, hide, truncate, scroll — explicitly, per range |
+| 11 | Do / Don't | At least 2 of each, with visuals or concrete examples |
+| 12 | Tokens used | The Layer 2/3 tokens it consumes — no raw values anywhere in the spec |
+
+## 5. Theming & Dark Mode
+
+- **Dark mode is a token remap, not a redesign** — but only if Sections 1–2 were obeyed. Semantic tokens get new primitive mappings; components and screens change zero code.
+- **Dark surfaces are not inverted light surfaces.** Dark base is rarely pure black (use a very dark neutral, e.g. `#0B0E14`-family) except for OLED-true-black themes, which are a deliberate product choice.
+- **Elevation in dark mode = lighter surface**, not shadow (shadows are invisible on dark). Encode elevation in surface tokens per theme.
+- **Contrast is checked per theme, per pair.** A pair that passes in light can fail in dark (mid-gray text is the classic casualty).
+
+Contrast pair table (minimums, WCAG 2.2 AA):
+
+| Pair | Minimum | Common failure |
+|---|---|---|
+| Body text on its surface | 4.5:1 | "Muted" text at 3.8:1 shipped as decoration |
+| Large text (≥24px, or 19px bold) | 3:1 | Display type over photography with no scrim |
+| Interactive component boundary vs. adjacent | 3:1 | Ghost button border invisible in dark mode |
+| Focus indicator vs. adjacent colors | 3:1 | Focus ring that only differs by hue |
+| Icon conveying meaning (not decorative) | 3:1 | Status icons failing on tinted backgrounds |
+| Disabled state | Exempt from WCAG, but must stay legible as "present but unavailable" | Disabled text so faint it reads as missing |
+
+- **Theme QA rule:** every new semantic token ships with both theme values in the same change. A token with only a light value is an unfinished token.
+
+## 6. Icon System Construction
+
+- **Derive icons from the product's own brand mark and visual language** — its geometry, angles, and metaphors. Generic emoji-style or mixed-stock icons break identity and are never acceptable as a system.
+- **One construction grid:** 24×24 viewBox, 2px keylines/padding safe area, all icons drawn on the same grid at the same optical size.
+- **One stroke rule:** single stroke weight across the set (1.5px or 2px at 24px grid — pick one), same corner radius on strokes and shapes, same cap/join style. Mixing filled and outline styles is allowed only as a deliberate active/inactive pair.
+- **Optical correction beats mathematical sameness:** circles and triangles are drawn slightly larger than squares to *look* the same size.
+- **Icons are components, not images:** they consume `color.icon.*` tokens, scale by token sizes (16/20/24), and every meaning-bearing icon has a text label or accessible name — icon-only controls get an `aria-label` in the spec.
+- **Test at 16px.** If the metaphor dies at the smallest shipped size, simplify the drawing; never ship a detailed icon that only works large.
+
+## 7. Motion System
+
+Motion is tokenized like color. Durations and easings are chosen by distance and purpose, never per-screen.
+
+| Token | Duration | Easing character | Use |
+|---|---|---|---|
+| `motion.duration.instant` | 80–120ms | ease-out | Hover/press feedback, toggles |
+| `motion.duration.short` | 150–200ms | ease-out | Tooltips, small reveals, chip changes |
+| `motion.duration.medium` | 250–350ms | ease-in-out | Panels, modals, tab content, layout shifts |
+| `motion.duration.long` | 400–600ms | ease-in-out | Page-level transitions, large surface changes |
+| `motion.duration.emphasis` | 600ms+ | spring/custom | Rare, brand moments only — needs explicit justification |
+
+Rules:
+- **Exits are shorter than entrances** (roughly 70–80%): leaving should never feel slower than arriving.
+- **Animate transform and opacity only** in product UI; animating layout properties (width, top, margins) causes jank and layout thrash.
+- **Reduced motion is a spec item, not a dev afterthought:** under `prefers-reduced-motion`, replace slides/springs with fades or instant changes; remove parallax and auto-playing motion entirely.
+- **Data-driven motion exception:** motion that visualizes real data changing (a value counting, a live position moving) is functional, and follows the data's own timing — but still respects reduced-motion by simplifying, not by faking data.
+
+## 8. Design-to-Code Handoff Protocol
+
+What the designer owes the developer — the handoff is incomplete without all of it:
+
+- [ ] Every screen/flow in the agreed state set (default, loading, empty, error, success — per the playbook's 5-state rule), not just the happy path
+- [ ] Token names, not raw values, annotated on components and spacing ("redlines" reference `space.4`, `color.text.muted`)
+- [ ] Component specs per Section 4 for anything new or changed
+- [ ] File/frame naming convention: `Flow / Screen / State` (e.g. `Checkout / Payment / Error-card-declined`) — no "final_v2_REAL" frames
+- [ ] Assets exported in the agreed formats with the agreed naming (`icon/<name>`, `img/<name>@2x`), illustrations as SVG where possible
+- [ ] Interaction notes for anything a static frame cannot show: what triggers it, duration/easing tokens, what interrupts it
+- [ ] A changelog note in the design file: what changed since the last handoff, so Dev diffs instead of re-reading everything
+
+Developer's side of the contract: build from tokens and specs; where the spec is silent, ask — a guessed value that ships becomes an untracked design decision.
+
+## 9. Design QA — Comparing Build vs. Design
+
+- **Compare at the same viewport, same data, same state.** Most "design bugs" reported are state mismatches (comparing an empty build against a full-data mock).
+- **Tolerance rules:** spacing/size deviation ≤2px = pass (rendering noise); 3–4px = log as minor; ≥5px or any wrong token (color, type size, radius) = defect. Color is exact — a near-miss hex is the wrong token, full stop.
+- **Check in this order:** layout/spacing → typography (size, weight, tabular numbers where required) → color tokens → states (force hover/focus/disabled/error, don't wait to stumble on them) → motion (duration feel + reduced-motion) → responsive at each range boundary ±1px.
+- **Evidence:** side-by-side screenshots with the deviation annotated; "looks off" without a marked screenshot is not a QA finding.
+- Findings route back by ownership: wrong token/value in code → Developer; wrong value in the spec → UI/UX fixes the spec first, then Dev re-implements. Never patch the build to differ from the spec silently.
+
+## 10. Maintaining the System
+
+- **Components are versioned like APIs.** A breaking change (removed variant, renamed prop, changed default) is a major bump with a migration note; additive changes are minor.
+- **Deprecation protocol:** mark deprecated → announce replacement + reason → keep working for an agreed window → remove only when usage is zero (search the codebase; don't trust memory).
+- **One owner per component.** Unowned components drift; the owner approves changes to spec and tokens for that component.
+- **Adoption is measured:** periodically count screens built from system components vs. one-off styles. A falling ratio means the system is missing something teams need — find out what before enforcing harder.
+- **Change requests follow the same gate discipline as features:** a new token/variant enters through a spec (why existing ones fail), not through a single screen's local need. One-off exceptions are recorded as exceptions with an expiry review date.
+- **Design debt is tracked like tech debt:** every known deviation (hardcoded value, missing state, forked component) is logged with an owner and a reason. A short, honest debt list is healthy; discovering deviations in QA, sprint after sprint, means the system process — not the designers — is failing.
+- **System documentation lives where builders work:** each component's spec (Section 4), tokens table, and do/don't examples are published in the same place the team already looks (design tool + repo), versioned together. A beautiful system site nobody opens loses to an ugly page everybody uses.
+
+
+---
+
+# ===== SKILL REFERENCE — skills/ui-ux-design/references/playbook.md =====
 
 # UI/UX Playbook — Deep Reference
 

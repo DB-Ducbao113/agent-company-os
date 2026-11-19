@@ -2,7 +2,7 @@
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Release / DevOps — Gate 8
@@ -374,5 +374,6 @@ The gate approver will send the work back if:
 - `references/playbook.md` — the rules for choosing the SemVer bump level, the
   changelog format, the rollback plan template, how to design the smoke test
   set, post-release monitoring, basic incident response, and light DORA.
+- `references/release-engineering.md` — read when releases get serious: deployment strategies, feature-flag discipline, environment parity, CI/CD gating, observability minimums, backup/restore drills, incident runbook, release calendar.
 - `templates/RELEASE.template.md` — the release record template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision question 9).

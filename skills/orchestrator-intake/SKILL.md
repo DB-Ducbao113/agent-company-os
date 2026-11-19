@@ -2,7 +2,7 @@
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -283,6 +283,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 12. References
 
 - `references/playbook.md` — the 8-dimension ambiguity rubric, the question bank by 6 groups, the full EARS pattern table, worked routing examples, and edge cases for when the user does not cooperate with answering.
+- `references/elicitation-deep-dive.md` — read when the standard question round still leaves ambiguity, stakeholders conflict, or the request is phrased in quality adjectives: deep 5 Whys, laddering, scenario walkthroughs, the NFR question catalog, scope-splitting heuristics, decision-log discipline, and pricing residual ambiguity after 2 rounds.
 - `templates/SPEC.template.md` — the official spec structure.
 - `workflow/ROUTING-MATRIX.md` — the 12-question decision tree + routing table by task type.
 - `workflow/MASTER-WORKFLOW.md` — the gate rules for the whole company.

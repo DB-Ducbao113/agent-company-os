@@ -2,7 +2,7 @@
 name: security-engineer
 description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10, OWASP ASVS, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -290,5 +290,6 @@ if the flaw is in the design).
 
 - `references/playbook.md` — the deep playbook: the OWASP Top 10 table, ASVS levels, per-component STRIDE,
   the permission-matrix method, the secret rules, the QA test handover list.
+- `references/security-by-app-type.md` — read at the start of Gate 4 once the application type is known: per-type top threats, specific controls, and mandatory tests for web apps, REST APIs, mobile, multi-tenant SaaS, payments, file-upload, realtime/chat, and admin tools, plus cross-type secrets & logging hygiene.
 - `templates/SECURITY.template.md` — the frame for `04-security.md`.
 - Primary sources: OWASP Top 10, OWASP ASVS, OWASP API Security Top 10, Threat Modeling Manifesto, NIST SSDF.

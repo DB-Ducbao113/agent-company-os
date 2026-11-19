@@ -2,7 +2,7 @@
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Integration Engineer — Gate 6
@@ -371,5 +371,6 @@ QA will send the work back if:
 - `references/playbook.md` — the method for building the contract verification
   matrix, how to select backbone flows, the Mock Inventory format, environment
   pitfalls, and the detailed deviation-handling procedure.
+- `references/third-party-integrations.md` — read when the other party is an external provider: provider evaluation, OAuth/OIDC, webhooks, payments, failure-mode behavior, sandbox-vs-prod divergence, production monitoring.
 - `templates/API-CONTRACT.template.md` — the contract + Deviation Log template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision question 7).

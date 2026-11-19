@@ -31,7 +31,9 @@ add "ROLE CHAIN" "workflow/ROLE-CHAIN.md"
 add "ROUTING MATRIX" "workflow/ROUTING-MATRIX.md"
 for d in skills/*/; do
   add "SKILL" "${d}SKILL.md"
-  add "SKILL PLAYBOOK" "${d}references/playbook.md"
+  for r in "${d}"references/*.md; do
+    [ -f "$r" ] && add "SKILL REFERENCE" "$r"
+  done
 done
 for f in templates/*.md; do add "TEMPLATE" "$f"; done
 add "EXTERNAL SKILLS INDEX" "skills-index/SKILLS-INDEX.md"

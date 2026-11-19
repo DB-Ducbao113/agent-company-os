@@ -2,7 +2,7 @@
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # QA / Tester — Gate 7
@@ -361,6 +361,7 @@ data, or evidence — treat that as a failed handoff and complete the record.
   Decision Table, State Transition), the traceability matrix, the bug report
   standard, the severity table, regression strategy, and how to run the security
   tests.
+- `references/test-design-deep-dive.md` — read when deciding where testing effort goes: risk-based prioritization, exploratory charters, test data, non-functional checks, flaky-test protocol, regression selection, defect clustering, decision-grade reporting.
 - `templates/TEST-REPORT.template.md` — the test report template.
 - `workflow/ROUTING-MATRIX.md` — when this role is mandatory (decision questions
   8 and 10).

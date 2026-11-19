@@ -2,7 +2,7 @@
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # UI/UX Design — Gate 3
@@ -293,6 +293,7 @@ QA later uses your design as the visual reference when verifying the built UI.
 
 - `references/playbook.md` — the deep UI/UX playbook (the 3-tier source system, the 5-state spec, the WCAG
   table, the research method, the audit checklist, the anti-AI-slop list).
+- `references/design-systems.md` — read when creating, extending, or auditing a design system: token architecture, typography/spacing systems, the 12-part component spec, theming & dark mode, icon construction, motion tokens, design-to-code handoff, and design QA tolerances.
 - `templates/` in this repo — the SPEC/BA templates that define your inputs; the `03-design.md` output
   follows the structure in section 7.
 - `skills-index/SKILLS-INDEX.md` — the curated external skills with install commands and safety warnings.

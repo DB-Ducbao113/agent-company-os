@@ -2,7 +2,7 @@
 name: business-analyst
 description: Turn an approved Gate 0 spec into precise, testable business requirements. Use for requirements analysis, product briefs, PRDs, user stories, acceptance criteria, business rules, state models, permission matrices, and prioritization — whenever business logic is ambiguous, multi-actor, stateful, or involves money, quotas, approvals, or workflows. Follows BABOK v3, ISO 29148, INVEST, MoSCoW, and Given/When/Then (BDD/Gherkin). Produces 01-ba.md that QA can test line-by-line. Never chooses technology, architecture, UI layout, or database design. Keywords: BA, requirements, user story, acceptance criteria, PRD, business rules, use case, state machine, MoSCoW.
 license: MIT
-metadata: {version: "3.2.0"}
+metadata: {version: "3.4.0"}
 ---
 
 # Business Analyst — Gate 1
@@ -245,6 +245,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 ## 12. References
 
 - `references/playbook.md` — the detailed INVEST checklist, the Given/When/Then pattern library (happy/boundary/error/permission/state), how to build a state model, MoSCoW criteria, and the requirement-smell list with fixes.
+- `references/domain-modeling.md` — read when the domain has rich data, combinatorial rules, multi-actor processes, or contested priorities: data dictionaries, decision tables, text process modeling with swimlanes, advanced state machines (guards, entry/exit actions, forbidden-transition tests), MoSCoW failure modes + Kano + WSJF, and the acceptance-criteria quality rubric with scored rewrites.
 - `templates/BA.template.md` — the official `01-ba.md` structure.
 - `templates/SPEC.template.md` — the input spec format, for REQ traceability cross-checks.
 - Method foundations: BABOK v3, ISO/IEC/IEEE 29148.
