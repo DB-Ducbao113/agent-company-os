@@ -1,0 +1,3 @@
+# Task working folders are usually kept in the PROJECT repo, not here.
+tasks/
+.DS_Store
