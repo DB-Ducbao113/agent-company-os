@@ -1,29 +1,74 @@
-# CHATGPT SETUP — "Installing" Agent Company OS on ChatGPT Web
+# Using Agent Company OS on ChatGPT (web)
 
-> ChatGPT has **no plugin marketplace** like Claude Code's `/plugin` system, and it cannot read Agent Skills folders natively.
-> The persistent equivalents on ChatGPT web are **Projects** (recommended) and **Custom GPTs**. Both work the same way:
-> a fixed **Instructions** text (the bootstrap below) + the repo's single-file edition as an uploaded knowledge file.
-> Set it up once; every new chat inside it runs the OS without re-attaching anything.
+ChatGPT now supports the same open Agent Skills standard as this repo: skills are
+installed natively from the **Plugins → Skills** tab, and whole plugin packages can be
+uploaded as a ZIP. No copy-pasting of the full manual is needed anymore. There are two
+native routes — try Route 1 first (one file), fall back to Route 2 (ten files).
+Route 3 (Project) remains as a fallback for plans without skill upload.
 
-## Route A — ChatGPT Project (recommended, works on all plans)
-1. In ChatGPT's left sidebar, choose **New project**. Name it `Agent Company OS`.
-2. Open the project's **⋯ menu → Project settings → Instructions**, and paste the **Bootstrap Instructions** below.
-3. In the project, choose **Add source / Add files** and upload **`dist/FULL-CONTEXT.md`** from this repo
-   (download it here: https://raw.githubusercontent.com/DB-Ducbao113/agent-company-os/main/dist/FULL-CONTEXT.md).
-   One file is enough — it contains the entire repo. File limits per project vary by plan (Free ≈ 5, Plus ≈ 25, Pro/Business ≈ 40); you are using 1.
-4. Start every work chat **inside this project**. Give your task normally — Gate 0 starts automatically.
-5. When this repo releases a new version, replace the uploaded FULL-CONTEXT.md with the new one (project files are snapshots, they do not auto-update from GitHub).
+Everything you need is pre-built in this repo under `dist/`:
 
-## Route B — Custom GPT (if your account/workspace still offers GPT creation)
-1. Go to **Explore GPTs → Create** (or "My GPTs → Create a GPT") → **Configure** tab.
-2. Name: `Agent Company OS`. Description: "Runs your request like a disciplined software company: clarify → spec → gated specialist roles → verified output."
-3. **Instructions:** paste the Bootstrap Instructions below (kept under the GPT instructions character limit on purpose).
-4. **Knowledge:** upload **`dist/FULL-CONTEXT.md`** (same link as above). Conversation starters (optional): "New task: …" / "Show current workflow status".
-5. Capabilities: enable **Web Search** (roles need it for their "What To Look Up" step) and **Code Interpreter** if available (lets it run checks and produce evidence files).
-6. Save (private or workspace-shared). Open this GPT whenever you want the OS active.
-   Note: OpenAI has been reshaping GPTs/Plugins across 2026 — if the Create option is not in your account, use Route A; it achieves the same result.
+- `dist/agent-company-os-plugin.zip` — the whole system as one plugin package.
+- `dist/chatgpt-skills-bundle.zip` — one download containing the 10 individual skill
+  ZIPs (unzip it once on your computer, then upload the 10 ZIPs inside).
+- Each skill ZIP contains the skill's `SKILL.md`, its deep-dive playbooks, a ChatGPT
+  display file (`agents/openai.yaml`), and `references/os-core.md` — the shared
+  operating law (AGENTS.md + Constitution + workflow + routing + templates) bundled
+  into every skill, so the system holds together even when skills are installed
+  one by one.
 
-## Bootstrap Instructions (paste verbatim into Instructions)
+---
+
+## Route 1 — Upload the plugin ZIP (try first)
+
+1. In ChatGPT, open **Plugins** (sidebar).
+2. Click **Add ▾** (top right) → **Upload plugin ZIP** ("Tải lên tệp nén plugin").
+3. Choose `dist/agent-company-os-plugin.zip`. Do not unzip it first.
+4. Wait for the automated checks. If it is accepted, all 10 role skills appear,
+   with the Orchestrator as the onboarding skill.
+
+If this route rejects the file (the plugin-package format is newer and stricter than
+skill upload), use Route 2 — it is the officially documented skill path.
+
+## Route 2 — Upload the 10 skills (documented path)
+
+1. Download `dist/chatgpt-skills-bundle.zip` and unzip it once — you get 10 files
+   like `orchestrator-intake.zip`, `business-analyst.zip`, …
+2. In ChatGPT, open **Plugins** (sidebar) → the **Skills** tab (top of the page).
+3. Click **Add ▾** → **Upload from your computer**.
+4. Choose one skill ZIP (do NOT unzip the skill ZIP itself). Repeat for all 10.
+5. ChatGPT scans each upload; most become available immediately. A skill marked
+   **Needs Review** asks you to open and confirm it; **Blocked** means the scan
+   stopped it — re-download the ZIP unchanged and try again.
+
+### Using the installed skills
+
+- In any chat, type `@` and pick a skill explicitly, or just describe the task —
+  ChatGPT invokes the skill whose description matches.
+- Start every new task with the **Orchestrator / Intake** skill (Gate 0). As work
+  moves through the gates, invoke the matching role skill (or let the description
+  matching do it) — each role's handoff tells you which skill comes next.
+- Uploaded skills do not auto-update: when this repo releases a new version,
+  re-download the ZIPs and upload them again (rebuild them any time with
+  `python3 scripts/build-chatgpt-packages.py`).
+
+## Route 3 — ChatGPT Project (fallback, works on every plan)
+
+Use this when your plan has no skill upload.
+
+1. Sidebar → **New project**, name it `Agent Company OS`.
+2. Project menu (⋯) → **Project settings → Instructions** → paste the Bootstrap
+   Instructions below.
+3. **Add files / sources** → upload the single file `dist/FULL-CONTEXT.md`
+   (build it with `bash scripts/build-full-context.sh`, or download the raw file
+   from the repo). One file is deliberate: project knowledge is retrieved in
+   chunks, and a single complete manual keeps cross-references intact.
+4. Do all Agent Company OS work in chats inside this project.
+5. On every new repo version, replace the uploaded file — project files are
+   snapshots; they do not sync from GitHub.
+
+## Bootstrap Instructions (for Route 3 — paste as-is)
+
 ```
 You are running Agent Company OS. The uploaded file FULL-CONTEXT.md is your complete operating manual: it contains AGENTS.md, the Constitution, the workflow and routing matrix, all 10 role skills with playbooks, templates, and the external skills index. Treat it as binding instructions, not background reading.
 
@@ -41,6 +86,13 @@ When I give you a task, begin by confirming the OS is active and which gate we a
 ```
 
 ## Honest limits on ChatGPT
-- ChatGPT retrieves uploaded-file content in chunks; for very long sessions it may miss a section. If a role's answer looks thin, say: "Re-read the <role-name> section of FULL-CONTEXT.md and redo this gate."
-- It cannot run your project's real code/tests unless you use its code environment with uploaded code — treat execution evidence from ChatGPT as requirement-level checks unless it actually ran something, and make it say which.
-- Keep the task's artifacts: download the files it produces into your project's task folder (chat is the workplace, files are the memory).
+
+- **Skills are invoked per role, not as one program.** The discipline comes from
+  the Orchestrator skill and the bundled `os-core.md`; if a chat drifts, say:
+  "Re-read the orchestrator-intake skill and os-core.md, and redo this gate."
+- **Retrieval is chunked** on the Project route: the model may not hold all
+  ~6,500 lines at once. Same remedy: name the role/section to re-read.
+- **Execution evidence** is requirement-level unless ChatGPT actually ran
+  something (e.g. via code interpreter). Treat "verified" claims accordingly.
+- Custom GPTs are being retired by OpenAI in favor of skills/plugins — prefer
+  Routes 1–2 over building a new Custom GPT.

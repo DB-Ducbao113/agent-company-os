@@ -3,6 +3,11 @@
 All notable changes to this project are documented here.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [3.5.0] — 2026-11-19
+### Added
+- **Native ChatGPT install packages** in `dist/` (built by `scripts/build-chatgpt-packages.py`): `agent-company-os-plugin.zip` (portable Agent Plugins layout: `plugin.json` + all 10 skills, Orchestrator as onboarding skill) for Plugins → Add → Upload plugin ZIP; and `chatgpt-skills/` + `chatgpt-skills-bundle.zip` with one upload-ready ZIP per role for Plugins → Skills → Add → Upload from your computer. Every skill ZIP bundles `references/os-core.md` (AGENTS + Constitution + workflow + routing + all templates) so the system holds together when skills are installed one by one, plus an `agents/openai.yaml` display file.
+- `chat/CHATGPT-SETUP.md` rewritten around the native routes (plugin ZIP → skill ZIPs → Project fallback).
+
 ## [3.4.0] — 2026-11-19
 ### Added
 - **A second deep-dive playbook for every role** (in each skill's `references/`): Orchestrator → elicitation deep dive (5 Whys, laddering, NFR catalog, vague-word translation table); BA → domain modeling (data dictionary, decision tables, WSJF/Kano, AC quality rubric); Architect → architecture patterns catalog (use/avoid/cost, sync-vs-async, multi-tenancy, tech-selection matrix); UI/UX → design systems (3-layer tokens, type scale, 12-part component spec anatomy, theming, icon construction, design QA); Security → security by application type (web, API, mobile, multi-tenant SaaS, payments, file-upload, realtime, admin tools — threats, controls, mandatory tests per type); Developer → engineering craft; Code Review → review checklists by change type + comment bank; Integration → third-party integration field guide (OAuth, webhooks, payments, failure modes); QA → test design deep dive (risk-based testing, charter library, flaky protocol, regression selection); Release → release engineering (deployment strategies, flags, observability, DR, incident runbooks).
