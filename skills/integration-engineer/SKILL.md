@@ -2,7 +2,7 @@
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Integration Engineer — Gate 6
@@ -286,6 +286,21 @@ runs for real and passes → PASS.
 - [ ] Contract Deviation Log: 0 unhandled blocking deviations; remaining deviations have an owner and a deadline
 - [ ] The report states the verification environment, build, and test data used
 - [ ] The unverified portion (if any) is honestly listed in the report
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop the workflow and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-06-01 | The approved API contract is the single version both FE and BE are integrated against | Compare the contract file/version referenced by both sides' builds with the approved `02-api-contract.md` | Contract version/hash recorded in the integration report, matching on both sides |
+| TC-06-02 | Every endpoint in scope conforms to the contract (method, path, request fields, response fields) | Call each endpoint against the running system and diff actual responses against the contract, field by field | Endpoint-by-endpoint verification matrix with a PASS result per endpoint |
+| TC-06-03 | Every error code in the contract can be triggered and returns the contracted error body structure | Deliberately provoke each error condition and capture the raw error responses | Captured error response samples for every contracted error code, structure-checked |
+| TC-06-04 | Auth rejects invalid access: missing token, expired token, and one user reaching another user's data | Run the three negative auth requests against protected endpoints | Request/response logs showing the expected 401/403 rejection for all three cases |
+| TC-06-05 | The Mock Inventory is complete — no undeclared mock, stub, or fake data source remains in the integrated build | Search the codebase/config for mock/stub/fixture flags and compare findings against the Mock Inventory | Inventory table listing every mock found, with 0 undeclared entries |
+| TC-06-06 | Every backbone E2E flow passes end-to-end on the real running system (no mocked segment in the path) | Execute each backbone flow in the real environment from UI/client through to the real backend and data store | E2E run output or recordings per flow, each marked PASS |
+| TC-06-07 | The verification environment is sound: environment variables, CORS/cookies, timezone, and region all match the intended configuration | Walk the environment checklist against the running system and inspect effective config values | Completed environment checklist in the report with actual values noted |
+| TC-06-08 | The Contract Deviation Log has 0 unhandled blocking deviations; every remaining deviation has an owner and a deadline | Review the deviation log and confirm each open item's severity, owner, and due date | Deviation log extract showing 0 blocking-unhandled items |
 
 ## 10. Common Failures & Anti-Patterns
 

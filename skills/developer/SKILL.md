@@ -2,7 +2,7 @@
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Developer (FE / BE) — Gate 5
@@ -203,6 +203,21 @@ Story: "The user filters the invoice list by month."
 - [ ] Every AC has an honest status: passed / not passed / could not verify
 - [ ] Diff self-reviewed: no secrets, no debug code, no undeclared mocks, no out-of-scope changes
 - [ ] Dev notes include re-run commands for independent verification
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-05-01 | The baseline was checked and recorded before any change | Read the baseline entry in `05-dev-notes.md` and confirm it predates the first code change | Baseline build/test result recorded up front; any pre-existing failures named, not mixed with new ones |
+| TC-05-02 | Important logic was built test-first (TDD) | For a sampled slice, confirm the dev notes show the test failing (RED) before the implementation existed, then passing (GREEN) | RED run output followed by GREEN run output for the same test, recorded in the dev notes |
+| TC-05-03 | Every bug fix has a reproducing test | For each fixed bug, locate its reproducing test and run it against the fixed code | One reproducing test per bug, targeting the reported symptom, passing on the fix with run output recorded |
+| TC-05-04 | The implementation conforms to the API contract | Diff the implemented endpoints, field names/types, and error codes against `02-api-contract.md`, point by point | Contract conformance check in the dev notes: everything matches; deviations are none, or each carries the Architect's approval |
+| TC-05-05 | Every applicable SEC-REQ is implemented as specified | For each SEC-REQ, run or inspect its stated verification (e.g. the server-side ownership check behind an endpoint) | Per-SEC-REQ verification method + result recorded in the dev notes |
+| TC-05-06 | Build, full test suite, and lint actually ran | Read the raw output pasted in `05-dev-notes.md`; spot re-run the recorded commands and compare | Raw command output in the dev notes (not a summary) with all-green results, reproducible via the listed re-run commands |
+| TC-05-07 | Every AC has an honest status | Walk the AC table in the dev notes: each AC is marked passed / not passed / could not verify, with its proving test or evidence | Complete AC status table; no AC silently missing; unverified items stated plainly |
+| TC-05-08 | The diff is clean and strictly in scope | Self-review the full diff, file by file, against the claimed scope | Diff contains no secrets, no debug code, no undeclared mocks, and no out-of-scope files; every mock declared in the dev notes |
 
 ## 10. Common Failures & Anti-Patterns
 

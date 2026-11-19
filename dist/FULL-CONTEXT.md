@@ -67,15 +67,17 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 | Which roles a task needs | `workflow/ROUTING-MATRIX.md` |
 | Writing a spec | `templates/SPEC.template.md` |
 | Finding an external skill for a role | `skills-index/SKILLS-INDEX.md` |
-| A worked example | `examples/example-redesign-ui.md` |
+| A worked example | `examples/example-redesign-ui.md`, `examples/example-feature-end-to-end.md` |
+| A test case failed | `templates/FAILURE-REPORT.template.md` + the Test-Case Gate law in `workflow/MASTER-WORKFLOW.md` |
+| A term is unclear | `docs/GLOSSARY.md` |
 
 ## Working folder convention for each task (the agent creates this when Gate 0 passes)
 
 ```
 tasks/<YYYY-MM-DD>-<slug>/
   00-idea.md  00-spec-and-routing.md  01-ba.md  02-arch-*.md  02-api-contract.md
-  03-design.md  04-security.md  05-dev-notes.md  06-integration.md
-  07-test-report.md  08-release.md  STATUS.md
+  03-design.md  04-security.md  05-dev-notes.md  05-code-review.md  06-integration.md
+  07-test-report.md  08-release.md  FAILURE-REPORT-[nn].md (only when a failure occurs)  STATUS.md
 ```
 Files outside a task's routing are not created — and the Routing Decision must state why each skipped role was skipped.
 
@@ -207,7 +209,7 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 | 3 | UI/UX (`ui-ux-design`) | BA doc + Architect's frame + design system | Researched design + prototype → Developer FE; states & flows also inform QA cases | `03-design.md` + board/prototype |
 | 4 | Security (`security-engineer`) | Architect's design + contract | Threat model, permission matrix, mandatory security requirements → Developer (must implement); security test list → QA (must execute) | `04-security.md` |
 | 5 | Developer (`developer`) | Spec + BA + contract + design + security requirements | Working implementation + evidence → Code Review, then Integration | code + `05-dev-notes.md` |
-| 5b | Code Review (`code-review`) | Developer's diff + spec/contract | Verdict + findings → Developer (fix loop); APPROVE unlocks Integration | review section in `05-dev-notes.md` or `05-code-review.md` |
+| 5b | Code Review (`code-review`) | Developer's diff + spec/contract | Verdict + findings → Developer (fix loop); APPROVE unlocks Integration | `05-code-review.md` (its own file — never a section inside the developer's notes) |
 | 6 | Integration (`integration-engineer`) | FE + BE builds + API contract | Verified combined system, deviation log, honest mock inventory → QA | `06-integration.md` |
 | 7 | QA (`qa-tester`) | BA acceptance criteria (from Gate 1) + integrated build + Security's test list | Test report with traceability → Release (PASS required); bugs → Developer (fix → re-test loop) | `07-test-report.md` |
 | 8 | Release (`release-devops`) | QA PASS + user's explicit release order | Live, verified release + changelog + rollback plan → the user / end users | `08-release.md` |
@@ -268,7 +270,7 @@ Conditions: no behavior change, no layout change, no touching auth/data/money. O
 name: business-analyst
 description: Turn an approved Gate 0 spec into precise, testable business requirements. Use for requirements analysis, product briefs, PRDs, user stories, acceptance criteria, business rules, state models, permission matrices, and prioritization — whenever business logic is ambiguous, multi-actor, stateful, or involves money, quotas, approvals, or workflows. Follows BABOK v3, ISO 29148, INVEST, MoSCoW, and Given/When/Then (BDD/Gherkin). Produces 01-ba.md that QA can test line-by-line. Never chooses technology, architecture, UI layout, or database design. Keywords: BA, requirements, user story, acceptance criteria, PRD, business rules, use case, state machine, MoSCoW.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Business Analyst — Gate 1
@@ -464,6 +466,21 @@ Feature: **online appointment booking for a small clinic, on a SaaS website.**
 - [ ] The `[TBC]`/`[ASSUMPTION]`/`[CONFLICT]` list has an owner and a blocking level for each item
 - [ ] The file contains no technology/architecture/UI decisions
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define the test cases before working, run all of them, 100% PASS to proceed — any FAIL → stop the gate and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-01-01 | Work started only on an APPROVED spec: the input spec's status is APPROVED with a confirmed playback, not DRAFT | Open `00-spec-and-routing.md` and check its status and the recorded playback confirmation before writing anything | The spec's APPROVED status line and confirmation record cited at the head of `01-ba.md` |
+| TC-01-02 | Every business rule containing a number states the number's source | Sample every BR-xx with a numeric value and trace it to a Clarifications answer, an existing policy, or a `[PROPOSED — VALIDATE]` label | The BR list in `01-ba.md`, each numbered rule carrying its source citation |
+| TC-01-03 | Every user story passes INVEST, and stories failing Small/Testable were split with dependencies recorded | Check each US-xx against the INVEST checklist in `references/playbook.md` | Per-story INVEST check results recorded in `01-ba.md` |
+| TC-01-04 | Every story has ≥3 happy-path AC and ≥2 boundary/error AC, all in Given/When/Then form with an observable "Then" | Count the AC per story and inspect each AC's format and "Then" clause | The AC tables in `01-ba.md` showing the per-story counts and G/W/T format |
+| TC-01-05 | Traceability is two-way and orphan-free: every US traces to a REQ-xx, every AC traces to a US | Walk the ID references in both directions (REQ → US → AC and back) and list any orphan | The REQ/US/AC ID references in `01-ba.md` with no orphan found in the walk |
+| TC-01-06 | The state model and the AC agree in both directions, and forbidden transitions are explicitly recorded | List every state named in any AC and check it exists in the model; list every model state and check it appears in AC; check the forbidden-transitions list is non-empty where a lifecycle exists | The transition table in `01-ba.md` plus the recorded forbidden transitions |
+| TC-01-07 | The permission matrix has no blank cells, and every unclear cell is marked `[TBC]` rather than defaulted to "Allowed" | Scan the actor × action matrix cell by cell for blanks and for unjustified "Allowed" entries | The completed permission matrix in `01-ba.md` with zero blank cells |
+| TC-01-08 | The document contains no HOW: no technology, architecture, table, or API decisions appear anywhere in `01-ba.md` | Search the document text for technology/table/API terms and read any hits in context | The final `01-ba.md` text, with the term search returning no genuine HOW content |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks things | Do this instead |
@@ -623,7 +640,7 @@ Rule: the total effort of Must items should be ≤ ~60% of the round's capacity;
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)
@@ -737,8 +754,8 @@ with the words "fixed".
 ## 5. What To Use
 
 **This repo's files:**
-- The review output: `05-code-review.md` (large changes) or the Review section of `05-dev-notes.md`
-  (small changes) — structure in section 7.
+- The review output: `05-code-review.md` — the review's own file; the verdict and findings always
+  live there — structure in section 7.
 - `references/playbook.md` in this skill folder — the detailed Google review order, the severity label
   scale, the security-sensitive pattern list, and good-vs-bad comment examples. Read it during the review.
 - `templates/` in this repo — the artifact templates used as references to check against.
@@ -786,8 +803,8 @@ with the words "fixed".
 
 ## 7. Outputs
 
-- **The review document** in `05-code-review.md` (large changes) or the Review section of
-  `05-dev-notes.md` (small changes), containing:
+- **The review document** — always its own file, `05-code-review.md`, where the verdict and
+  findings live — containing:
   1. The scope reviewed: the diff/branch, the artifacts checked against, the commands you re-ran + results.
   2. Findings in review order, each: severity label + file:line + the problem + the consequence + a fix suggestion.
   3. What could not be checked (and why) — recorded honestly.
@@ -819,6 +836,21 @@ Diff: an endpoint that updates a record by ID.
 - [ ] What could not be checked is recorded honestly
 - [ ] The APPROVE / REQUEST CHANGES verdict is explicit; blockers fully listed
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-05R-01 | The reviewer is independent of the author | Check that `05-code-review.md` names a reviewer who did not write the change, or explicitly declares the limitation | Reviewer identity — or the declared-limitation statement — recorded at the top of the review |
+| TC-05R-02 | Dev's evidence was independently re-verified | Compare the review's own recorded re-run results (build, related tests) against the claims in `05-dev-notes.md` | Re-run commands + results recorded in the review; any mismatch raised as a finding |
+| TC-05R-03 | Every AC was reconciled against the code | Walk the AC list: for each AC the review states where the code satisfies it (main path, edges, errors) or raises a finding | AC reconciliation covering all ACs; every gap appears as a labeled finding |
+| TC-05R-04 | Contract conformance was checked point by point | Verify the review compared fields, error codes, and auth behavior against `02-api-contract.md` | Contract check recorded in the review; every deviation is a finding citing the contract clause |
+| TC-05R-05 | The security-sensitive pattern sweep was performed | Check the review against the playbook's pattern list: server-side validation, ownership checks, query concatenation, secrets, sensitive logging, excessive data, disabled TLS verification, file paths from input | Sweep results recorded; each hit labeled at least [SHOULD FIX], and [BLOCKER] when it touches data/money/permissions |
+| TC-05R-06 | Every finding is actionable | Sample the findings: each carries a severity label, file:line, the consequence if merged, and a concrete suggestion | Findings list where 100% of entries carry label + file:line + consequence + suggestion |
+| TC-05R-07 | The verdict is explicit and consistent with the findings | Read the verdict: APPROVE only when no [BLOCKER] remains; REQUEST CHANGES lists every blocker | Explicit verdict line in `05-code-review.md` plus the complete blocker list (or "none") |
+| TC-05R-08 | Review coverage is honestly bounded | Check the review records what was NOT checked, and why | "Could not check" section present in the review; the APPROVE scope matches the recorded coverage |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks | Do this instead |
@@ -839,9 +871,9 @@ plus your notes on what was not checked. On REQUEST CHANGES: the Developer, who 
 and fixes it for re-review.
 
 **(b) The exact artifacts and required contents:**
-- The review document (`05-code-review.md`, or the Review section of `05-dev-notes.md`) with all 4
-  contents listed in section 7 (scope + artifacts + commands re-run, ordered findings with labels,
-  unchecked areas, explicit verdict + blocker list).
+- The review document `05-code-review.md` (the review's own file, holding the verdict and findings)
+  with all 4 contents listed in section 7 (scope + artifacts + commands re-run, ordered findings
+  with labels, unchecked areas, explicit verdict + blocker list).
 - `STATUS.md` updated with the Gate 5 review outcome.
 
 **(c) Your handoff checklist (complete before passing):**
@@ -1010,7 +1042,7 @@ consequence, the author cannot judge importance; without the suggestion, the fix
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Developer (FE / BE) — Gate 5
@@ -1212,6 +1244,21 @@ Story: "The user filters the invoice list by month."
 - [ ] Diff self-reviewed: no secrets, no debug code, no undeclared mocks, no out-of-scope changes
 - [ ] Dev notes include re-run commands for independent verification
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-05-01 | The baseline was checked and recorded before any change | Read the baseline entry in `05-dev-notes.md` and confirm it predates the first code change | Baseline build/test result recorded up front; any pre-existing failures named, not mixed with new ones |
+| TC-05-02 | Important logic was built test-first (TDD) | For a sampled slice, confirm the dev notes show the test failing (RED) before the implementation existed, then passing (GREEN) | RED run output followed by GREEN run output for the same test, recorded in the dev notes |
+| TC-05-03 | Every bug fix has a reproducing test | For each fixed bug, locate its reproducing test and run it against the fixed code | One reproducing test per bug, targeting the reported symptom, passing on the fix with run output recorded |
+| TC-05-04 | The implementation conforms to the API contract | Diff the implemented endpoints, field names/types, and error codes against `02-api-contract.md`, point by point | Contract conformance check in the dev notes: everything matches; deviations are none, or each carries the Architect's approval |
+| TC-05-05 | Every applicable SEC-REQ is implemented as specified | For each SEC-REQ, run or inspect its stated verification (e.g. the server-side ownership check behind an endpoint) | Per-SEC-REQ verification method + result recorded in the dev notes |
+| TC-05-06 | Build, full test suite, and lint actually ran | Read the raw output pasted in `05-dev-notes.md`; spot re-run the recorded commands and compare | Raw command output in the dev notes (not a summary) with all-green results, reproducible via the listed re-run commands |
+| TC-05-07 | Every AC has an honest status | Walk the AC table in the dev notes: each AC is marked passed / not passed / could not verify, with its proving test or evidence | Complete AC status table; no AC silently missing; unverified items stated plainly |
+| TC-05-08 | The diff is clean and strictly in scope | Self-review the full diff, file by file, against the claimed scope | Diff contains no secrets, no debug code, no undeclared mocks, and no out-of-scope files; every mock declared in the dev notes |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks | Do this instead |
@@ -1393,7 +1440,7 @@ right, not a failure.
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Integration Engineer — Gate 6
@@ -1678,6 +1725,21 @@ runs for real and passes → PASS.
 - [ ] The report states the verification environment, build, and test data used
 - [ ] The unverified portion (if any) is honestly listed in the report
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop the workflow and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-06-01 | The approved API contract is the single version both FE and BE are integrated against | Compare the contract file/version referenced by both sides' builds with the approved `02-api-contract.md` | Contract version/hash recorded in the integration report, matching on both sides |
+| TC-06-02 | Every endpoint in scope conforms to the contract (method, path, request fields, response fields) | Call each endpoint against the running system and diff actual responses against the contract, field by field | Endpoint-by-endpoint verification matrix with a PASS result per endpoint |
+| TC-06-03 | Every error code in the contract can be triggered and returns the contracted error body structure | Deliberately provoke each error condition and capture the raw error responses | Captured error response samples for every contracted error code, structure-checked |
+| TC-06-04 | Auth rejects invalid access: missing token, expired token, and one user reaching another user's data | Run the three negative auth requests against protected endpoints | Request/response logs showing the expected 401/403 rejection for all three cases |
+| TC-06-05 | The Mock Inventory is complete — no undeclared mock, stub, or fake data source remains in the integrated build | Search the codebase/config for mock/stub/fixture flags and compare findings against the Mock Inventory | Inventory table listing every mock found, with 0 undeclared entries |
+| TC-06-06 | Every backbone E2E flow passes end-to-end on the real running system (no mocked segment in the path) | Execute each backbone flow in the real environment from UI/client through to the real backend and data store | E2E run output or recordings per flow, each marked PASS |
+| TC-06-07 | The verification environment is sound: environment variables, CORS/cookies, timezone, and region all match the intended configuration | Walk the environment checklist against the running system and inspect effective config values | Completed environment checklist in the report with actual values noted |
+| TC-06-08 | The Contract Deviation Log has 0 unhandled blocking deviations; every remaining deviation has an owner and a deadline | Review the deviation log and confirm each open item's severity, owner, and due date | Deviation log extract showing 0 blocking-unhandled items |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure / Anti-pattern | Consequence | The right way |
@@ -1892,7 +1954,7 @@ the trail when a deviation appears.
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -2122,6 +2184,21 @@ The task folder follows the convention in this repo's `AGENTS.md` (folder `tasks
 - [ ] The Routing Decision answers all 12 questions; every skipped team has a reason
 - [ ] `STATUS.md` is created, Gate 0 is awaiting approval, and no team has started work yet
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define the test cases before working, run all of them, 100% PASS to proceed — any FAIL → stop the gate and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-00-01 | The original request is stored verbatim in `00-idea.md`, with no paraphrasing or meaning-changing edits | Compare the text in `00-idea.md` against the user's original message word for word | The quoted original in `00-idea.md` matches the source message exactly |
+| TC-00-02 | Long-input coverage is zero-drop: every segment S-xx maps to at least one Requirement Inventory row | Re-walk the numbered segments in `00-idea.md` against the inventory in spec §12 and count unmapped segments | Coverage line in the spec reading "Segments: N · Mapped: N · Unmapped: 0" |
+| TC-00-03 | No clarifying question asks about something already answered in `PROJECT-PROFILE.md` or prior artifacts | Cross-check each question against the profile sections and artifacts found in Step 2 | The question list, with the sources checked noted per question |
+| TC-00-04 | Question discipline holds: ≤5 questions per round, ≤2 rounds, and every core question offers options plus a proposed default | Count questions per round in the recorded Clarifications and inspect their format | The Clarifications Q&A recorded in the spec showing counts and option/default format |
+| TC-00-05 | Playback was confirmed by the user before the spec was written | Check that the spec records the playback and the user's confirmation/date, in the 6-bullet playback format | The playback block plus the recorded user confirmation in the spec |
+| TC-00-06 | The spec is complete per `templates/SPEC.template.md`, and every functional requirement has a REQ-xx ID in EARS form | Walk the spec section by section against the template; non-applicable sections must carry a reason, not be deleted | The completed `00-spec-and-routing.md` with all sections present and REQ-xx IDs throughout |
+| TC-00-07 | Every success criterion is measurable, with no unmeasurable wording ("beautiful", "smooth", "better") left without a metric | Scan each success criterion for a number, threshold, or observable condition QA could re-check | The success-criteria list, each criterion carrying its metric or observable condition |
+| TC-00-08 | The Routing Decision answers all 12 decision-tree questions, gives every skipped team a reason, and states each team's input→output | Check the Routing Decision against `workflow/ROUTING-MATRIX.md` question by question | The Routing Decision table in the spec with 12 recorded answers and per-team input→output |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks things | Do this instead |
@@ -2288,7 +2365,7 @@ A summary-style intake would likely keep S-01/S-02 and lose S-05 and S-07 — ex
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # QA / Tester — Gate 7
@@ -2563,6 +2640,21 @@ regression over the checkout group → pass → conclusion PASS.
 - [ ] The unverified / cut portion is honestly listed with reasons
 - [ ] The gate conclusion states its applicable conditions (environment, scope) — no fake unconditional PASS
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop the workflow and issue a Failure Report. They are the gate's own quality checks on the testing work itself, complementing (not duplicating) the functional test cases QA designs for the product.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-07-01 | Traceability is complete: every acceptance criterion maps to at least one executed test case | Cross-check the traceability matrix against the full AC list from the BA artifact, both directions | Matrix with 0 unmapped AC and 0 orphan test cases |
+| TC-07-02 | Every high-risk AC (money, data, permissions) has boundary and error cases, not only happy-path cases | Inspect the case set for each high-risk AC and confirm boundary-value and failure-mode cases exist | Matrix rows for high-risk AC showing boundary + error case IDs |
+| TC-07-03 | Test cases are executable as written: concrete input data and a verifiable expected result for each | Pick a sample of cases and execute them literally, exactly as documented, without improvisation | Sampling note in the report confirming the sampled cases ran as written |
+| TC-07-04 | Testing ran on the exact build that passed Integration, with environment/build/device recorded | Compare the build identifier in the test report header with the Integration gate's passed build | Report header naming the build, environment, and device/browser matrix used |
+| TC-07-05 | The mandatory security test list handed over from Gate 4 was executed in full, with results recorded separately | Reconcile the Gate 4 security list item by item against the executed results section | Security results section with a PASS/FAIL entry for every handed-over item |
+| TC-07-06 | Every bug report is complete: reproduction steps, severity, evidence, and a link to its AC/test case | Audit each open and closed bug in the register for the four required fields | Bug register with no field gaps across all entries |
+| TC-07-07 | Open P0 bugs = 0 and open P1 bugs = 0 at the moment of the gate conclusion | Query the bug register filtered by severity P0/P1 and status open, at conclusion time | Register query result/screenshot showing 0 open P0 and 0 open P1 |
+| TC-07-08 | Every fixed bug was re-verified with its reproducing case, regression around the fixed areas has run, and anything not verified is honestly listed with reasons | Check re-test results for each fixed bug, the regression run record, and the report's "not verified" section | Re-verification results per fixed bug, regression run log, and a completed "not verified" section |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure / Anti-pattern | Consequence | The right way |
@@ -2797,7 +2889,7 @@ Execute them like ordinary test cases, plus these notes:
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Release / DevOps — Gate 8
@@ -3082,6 +3174,21 @@ for users.
 - [ ] The `08-release.md` record is complete: version, times, approver, results, incidents (if any)
 - [ ] The release has been announced to the stakeholders
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop the workflow and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-08-01 | Prerequisites hold before anything ships: QA gate PASS with P0/P1 = 0, and an explicit release order from a named order-giver | Check the QA test report verdict and the recorded release order | QA report reference plus the release order (who, when) in `08-release.md` |
+| TC-08-02 | The release scope matches the approved spec — nothing that has not passed QA is included | Diff the release's change list/commits against the spec scope and the QA-passed build | Scope comparison in the release record with 0 out-of-scope changes |
+| TC-08-03 | The version bump follows SemVer and the changelog follows Keep a Changelog format | Apply the SemVer rules to the change set and inspect the changelog's categories/structure | New version tag plus the changelog entry for this release |
+| TC-08-04 | A rollback plan exists and was written BEFORE deploy, including the data/migration part and a verified backup | Check the plan's creation time against the deploy time; confirm the backup exists and is restorable/readable | Rollback plan file (timestamped before deploy) and backup location with a verification note |
+| TC-08-05 | The target environment is correctly configured: all environment variables present, secrets exist (values never exposed), correct region/domain | Run the environment checklist against the target and inspect effective configuration | Completed environment check in the release record, with no secret values printed |
+| TC-08-06 | The artifact actually deployed is the intended commit/branch per the project's convention | Compare the deployed build's commit SHA reported by the platform with the intended SHA | Deployed SHA recorded in `08-release.md`, matching the intended commit |
+| TC-08-07 | Smoke tests pass on staging before production, and again on the production real URL after deploy, with each flow's result recorded | Execute the defined smoke flows in both environments and log each flow's outcome | Per-flow smoke results for staging and for the production URL |
+| TC-08-08 | The post-release monitoring window passed without breaching the rollback threshold, and the release was announced to stakeholders | Review monitoring/error signals over the defined window against the rollback criteria; confirm the announcement went out | Monitoring summary for the window plus the announcement record in `08-release.md` |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure / Anti-pattern | Consequence | The right way |
@@ -3325,7 +3432,7 @@ compare against yourself over time.
 name: security-engineer
 description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10, OWASP ASVS, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -3539,6 +3646,21 @@ Feature: "A user views invoice detail via a link containing the invoice ID."
 - [ ] Findings graded with full reproductions; Critical/High = 0, or a signed risk acceptance exists
 - [ ] The gate conclusion states precisely what was checked and what could not be checked
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-04-01 | The data flow covers every actor and every trust boundary | Compare the actor list and data-flow diagram in `04-security.md` against the BA's actors and the Architect's data flow | Data-flow section listing all actors (including unauthenticated + third parties) with every trust boundary marked |
+| TC-04-02 | STRIDE covers all 6 threat groups for every component | Walk the STRIDE table component by component; each of S/T/R/I/D/E is addressed, or explicitly marked N/A with a reason | Complete STRIDE table; every threat has a mandatory countermeasure or is recorded as an open risk |
+| TC-04-03 | The permission matrix is complete and enforced server-side | Check every actor × action × data cell for an Allow / Deny / conditional value plus a named server enforcement point | Permission matrix with no blank cells and a server-side enforcement point named in every row |
+| TC-04-04 | BOLA/IDOR: a user cannot read or modify another user's data | QA executes the handed-over test: signed in as user A, request user B's object by its ID | Test result showing 403/404 on cross-owner access, attached to the QA security test results |
+| TC-04-05 | Privilege escalation is blocked, vertically and horizontally | QA executes: a regular user calls an admin-only endpoint; a same-role user accesses another owner's data | 403 responses recorded for both attempts in the security test results |
+| TC-04-06 | No secrets in code, repo, client bundle, or logs | Scan the diff and the built client bundle for keys/tokens/passwords; inspect log samples for raw sensitive data | Scan output with zero findings; log samples show masked values only |
+| TC-04-07 | Every SEC-REQ is numbered, sourced, and traced to a QA test | Cross-check the SEC-REQ list in `04-security.md` against its cited sources (OWASP/ASVS/stack doc) and the QA handover list | Each SEC-REQ-xx names its source and at least one QA test ID; no orphan requirements |
+| TC-04-08 | The post-integration re-check closes the gate honestly | Review the findings list: every finding graded with a reproduction; confirm Critical/High = 0, or a signed risk acceptance exists | Findings section with graded reproductions; gate conclusion stating exactly what was checked and what could not be checked |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks | Do this instead |
@@ -3729,7 +3851,7 @@ scoring scales wholesale.
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Solution Architect — Gate 2
@@ -3928,6 +4050,21 @@ Feature: **adding online appointment booking to a SaaS website that manages a cl
 - [ ] Compliance constraints for UI/UX, Dev, and Security are stated explicitly
 - [ ] No decision contradicts PROJECT-PROFILE without an explanatory ADR
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define the test cases before working, run all of them, 100% PASS to proceed — any FAIL → stop the gate and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-02-01 | Every current-state claim in the arch file rests on a real survey, including all relevant branches | Check the current-state section for the inspected file/folder paths and the list of branches checked behind each claim; claims without evidence must be marked `[UNVERIFIED]` | The survey section of `02-arch-*.md` with path evidence per claim |
+| TC-02-02 | The module map is complete: New, Modified, and Do Not Touch categories are all populated | Inspect the module map and confirm each of the three categories has entries (or an explicit "none" with a reason) | The module map in `02-arch-*.md` showing all three categories |
+| TC-02-03 | The data flows include at least one important error flow, not only happy paths | Read the flow descriptions and identify the error flow: where the error originates, where it stops, and what the caller receives | The flow section of `02-arch-*.md` documenting the error flow end to end |
+| TC-02-04 | Every endpoint in the contract is fully specified: auth, request validation, success response, and error responses with HTTP status plus a stable error code | Walk `02-api-contract.md` endpoint by endpoint against that four-part requirement | The contract file with complete per-endpoint entries, including stable error codes |
+| TC-02-05 | The contract settles all global conventions: common error format, pagination, UTC time format, idempotency where needed, and versioning strategy | Check the contract's conventions section for each of the five items | The conventions section of `02-api-contract.md` covering all five items |
+| TC-02-06 | Both FE and BE reviewed and confirmed the contract before it was locked | Look for the recorded confirmation from each side (review note, sign-off entry, or STATUS record) predating any implementation work | The confirmation records attached to `02-api-contract.md` / in `STATUS.md` |
+| TC-02-07 | The data model reconciles with the BA's state model, and concurrency-critical integrity rules are enforced by DB constraints, not code checks alone | Map each BA state to its storage representation; for each uniqueness/state rule in `01-ba.md`, check a matching DB constraint exists in the model | The data-model section of `02-arch-be.md` listing states, constraints, and where each rule is enforced |
+| TC-02-08 | If live data changes, the migration plan is safe: expand → migrate → contract sequencing, with backup, per-step rollback, and a volume estimate | Read the migration section and check for all four elements (sequence, backup, rollback, volume estimate) | The migration section of `02-arch-be.md` containing all four elements |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks things | Do this instead |
@@ -4089,7 +4226,7 @@ Rule: an NFR without a number is recorded as an `[ASSUMPTION]` together with the
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # UI/UX Design — Gate 3
@@ -4315,6 +4452,21 @@ Task: "Design the order list screen for an admin web app."
 - [ ] Self-audit complete: heuristics + WCAG AA + anti-slop; anything not passing has a fix plan
 - [ ] Motion (if any) has a clear purpose and respects reduced-motion + device constraints
 - [ ] The artifact opens and can be viewed immediately; `STATUS.md` updated
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-03-01 | Research basis exists: ≥3 real, shipped products were reviewed for the pattern being designed | Inspect the research table in `03-design.md`; open each cited product and confirm it is a real shipped product of the same type/pattern | Research table with ≥3 products, every row filled: pattern learned / applied where / what was NOT copied + why |
+| TC-03-02 | Every major design decision cites a source | Walk the decision list in `03-design.md`; each major decision (layout, interaction pattern, density) names a product, a DS rule, or an AC | Decision entries each carrying a cited source; zero decisions justified only by "it looks nice" |
+| TC-03-03 | Every BA Acceptance Criterion has a place in the layout | Reconcile the AC list from `01-ba.md` against the layout/board, one AC at a time | AC→layout mapping with no orphan AC; any gap recorded as a question sent back to the BA |
+| TC-03-04 | Only design-system tokens and components are used | Compare every color/spacing/radius/type value in the design against the DS token list, and every component against the component library | Zero off-token values; any new token/component listed separately as a proposed DS extension with a reason |
+| TC-03-05 | All 5 states are designed for every in-scope screen/component | For each screen, check that default, loading, empty, error, and success are drawn or described | 5-state notes/board sections present for every screen in scope |
+| TC-03-06 | Accessibility floor is met (WCAG 2.2 AA) | Measure text/background contrast for body text and status colors; check focus visibility and target sizes against the playbook's WCAG table | Contrast measurements recorded (≥ 4.5:1 normal text, ≥ 3:1 large text); self-audit results section in `03-design.md` |
+| TC-03-07 | Brand integrity: icons and logo come from the project's system only | Inspect the board/prototype for emoji icons, foreign icon sets, or a redrawn logo/wordmark | Zero emoji/foreign icons; logo/wordmark used as-is, referencing the original brand asset |
+| TC-03-08 | Motion and responsive behavior respect the project constraints | Check each animation for a stated purpose and reduced-motion behavior; view the design at the DS breakpoints, including narrow screens | Motion list with purpose + reduced-motion note; breakpoint check results recorded; light option noted when weak devices are in scope |
 
 ## 10. Common Failures & Anti-Patterns
 

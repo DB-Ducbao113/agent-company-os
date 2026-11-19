@@ -2,7 +2,7 @@
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)
@@ -116,8 +116,8 @@ with the words "fixed".
 ## 5. What To Use
 
 **This repo's files:**
-- The review output: `05-code-review.md` (large changes) or the Review section of `05-dev-notes.md`
-  (small changes) — structure in section 7.
+- The review output: `05-code-review.md` — the review's own file; the verdict and findings always
+  live there — structure in section 7.
 - `references/playbook.md` in this skill folder — the detailed Google review order, the severity label
   scale, the security-sensitive pattern list, and good-vs-bad comment examples. Read it during the review.
 - `templates/` in this repo — the artifact templates used as references to check against.
@@ -165,8 +165,8 @@ with the words "fixed".
 
 ## 7. Outputs
 
-- **The review document** in `05-code-review.md` (large changes) or the Review section of
-  `05-dev-notes.md` (small changes), containing:
+- **The review document** — always its own file, `05-code-review.md`, where the verdict and
+  findings live — containing:
   1. The scope reviewed: the diff/branch, the artifacts checked against, the commands you re-ran + results.
   2. Findings in review order, each: severity label + file:line + the problem + the consequence + a fix suggestion.
   3. What could not be checked (and why) — recorded honestly.
@@ -198,6 +198,21 @@ Diff: an endpoint that updates a record by ID.
 - [ ] What could not be checked is recorded honestly
 - [ ] The APPROVE / REQUEST CHANGES verdict is explicit; blockers fully listed
 
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-05R-01 | The reviewer is independent of the author | Check that `05-code-review.md` names a reviewer who did not write the change, or explicitly declares the limitation | Reviewer identity — or the declared-limitation statement — recorded at the top of the review |
+| TC-05R-02 | Dev's evidence was independently re-verified | Compare the review's own recorded re-run results (build, related tests) against the claims in `05-dev-notes.md` | Re-run commands + results recorded in the review; any mismatch raised as a finding |
+| TC-05R-03 | Every AC was reconciled against the code | Walk the AC list: for each AC the review states where the code satisfies it (main path, edges, errors) or raises a finding | AC reconciliation covering all ACs; every gap appears as a labeled finding |
+| TC-05R-04 | Contract conformance was checked point by point | Verify the review compared fields, error codes, and auth behavior against `02-api-contract.md` | Contract check recorded in the review; every deviation is a finding citing the contract clause |
+| TC-05R-05 | The security-sensitive pattern sweep was performed | Check the review against the playbook's pattern list: server-side validation, ownership checks, query concatenation, secrets, sensitive logging, excessive data, disabled TLS verification, file paths from input | Sweep results recorded; each hit labeled at least [SHOULD FIX], and [BLOCKER] when it touches data/money/permissions |
+| TC-05R-06 | Every finding is actionable | Sample the findings: each carries a severity label, file:line, the consequence if merged, and a concrete suggestion | Findings list where 100% of entries carry label + file:line + consequence + suggestion |
+| TC-05R-07 | The verdict is explicit and consistent with the findings | Read the verdict: APPROVE only when no [BLOCKER] remains; REQUEST CHANGES lists every blocker | Explicit verdict line in `05-code-review.md` plus the complete blocker list (or "none") |
+| TC-05R-08 | Review coverage is honestly bounded | Check the review records what was NOT checked, and why | "Could not check" section present in the review; the APPROVE scope matches the recorded coverage |
+
 ## 10. Common Failures & Anti-Patterns
 
 | Failure | Why it breaks | Do this instead |
@@ -218,9 +233,9 @@ plus your notes on what was not checked. On REQUEST CHANGES: the Developer, who 
 and fixes it for re-review.
 
 **(b) The exact artifacts and required contents:**
-- The review document (`05-code-review.md`, or the Review section of `05-dev-notes.md`) with all 4
-  contents listed in section 7 (scope + artifacts + commands re-run, ordered findings with labels,
-  unchecked areas, explicit verdict + blocker list).
+- The review document `05-code-review.md` (the review's own file, holding the verdict and findings)
+  with all 4 contents listed in section 7 (scope + artifacts + commands re-run, ordered findings
+  with labels, unchecked areas, explicit verdict + blocker list).
 - `STATUS.md` updated with the Gate 5 review outcome.
 
 **(c) Your handoff checklist (complete before passing):**

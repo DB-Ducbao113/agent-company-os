@@ -2,7 +2,7 @@
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # QA / Tester — Gate 7
@@ -276,6 +276,21 @@ regression over the checkout group → pass → conclusion PASS.
 - [ ] Fixed bugs were all re-verified with their reproducing case; regression around the fixed areas has run
 - [ ] The unverified / cut portion is honestly listed with reasons
 - [ ] The gate conclusion states its applicable conditions (environment, scope) — no fake unconditional PASS
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop the workflow and issue a Failure Report. They are the gate's own quality checks on the testing work itself, complementing (not duplicating) the functional test cases QA designs for the product.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-07-01 | Traceability is complete: every acceptance criterion maps to at least one executed test case | Cross-check the traceability matrix against the full AC list from the BA artifact, both directions | Matrix with 0 unmapped AC and 0 orphan test cases |
+| TC-07-02 | Every high-risk AC (money, data, permissions) has boundary and error cases, not only happy-path cases | Inspect the case set for each high-risk AC and confirm boundary-value and failure-mode cases exist | Matrix rows for high-risk AC showing boundary + error case IDs |
+| TC-07-03 | Test cases are executable as written: concrete input data and a verifiable expected result for each | Pick a sample of cases and execute them literally, exactly as documented, without improvisation | Sampling note in the report confirming the sampled cases ran as written |
+| TC-07-04 | Testing ran on the exact build that passed Integration, with environment/build/device recorded | Compare the build identifier in the test report header with the Integration gate's passed build | Report header naming the build, environment, and device/browser matrix used |
+| TC-07-05 | The mandatory security test list handed over from Gate 4 was executed in full, with results recorded separately | Reconcile the Gate 4 security list item by item against the executed results section | Security results section with a PASS/FAIL entry for every handed-over item |
+| TC-07-06 | Every bug report is complete: reproduction steps, severity, evidence, and a link to its AC/test case | Audit each open and closed bug in the register for the four required fields | Bug register with no field gaps across all entries |
+| TC-07-07 | Open P0 bugs = 0 and open P1 bugs = 0 at the moment of the gate conclusion | Query the bug register filtered by severity P0/P1 and status open, at conclusion time | Register query result/screenshot showing 0 open P0 and 0 open P1 |
+| TC-07-08 | Every fixed bug was re-verified with its reproducing case, regression around the fixed areas has run, and anything not verified is honestly listed with reasons | Check re-test results for each fixed bug, the regression run record, and the report's "not verified" section | Re-verification results per fixed bug, regression run log, and a completed "not verified" section |
 
 ## 10. Common Failures & Anti-Patterns
 

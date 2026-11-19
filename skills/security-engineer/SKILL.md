@@ -2,7 +2,7 @@
 name: security-engineer
 description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10, OWASP ASVS, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -215,6 +215,21 @@ Feature: "A user views invoice detail via a link containing the invoice ID."
 - [ ] Real environment configuration checked (cookies/TLS/CORS/headers, per stack)
 - [ ] Findings graded with full reproductions; Critical/High = 0, or a signed risk acceptance exists
 - [ ] The gate conclusion states precisely what was checked and what could not be checked
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-04-01 | The data flow covers every actor and every trust boundary | Compare the actor list and data-flow diagram in `04-security.md` against the BA's actors and the Architect's data flow | Data-flow section listing all actors (including unauthenticated + third parties) with every trust boundary marked |
+| TC-04-02 | STRIDE covers all 6 threat groups for every component | Walk the STRIDE table component by component; each of S/T/R/I/D/E is addressed, or explicitly marked N/A with a reason | Complete STRIDE table; every threat has a mandatory countermeasure or is recorded as an open risk |
+| TC-04-03 | The permission matrix is complete and enforced server-side | Check every actor × action × data cell for an Allow / Deny / conditional value plus a named server enforcement point | Permission matrix with no blank cells and a server-side enforcement point named in every row |
+| TC-04-04 | BOLA/IDOR: a user cannot read or modify another user's data | QA executes the handed-over test: signed in as user A, request user B's object by its ID | Test result showing 403/404 on cross-owner access, attached to the QA security test results |
+| TC-04-05 | Privilege escalation is blocked, vertically and horizontally | QA executes: a regular user calls an admin-only endpoint; a same-role user accesses another owner's data | 403 responses recorded for both attempts in the security test results |
+| TC-04-06 | No secrets in code, repo, client bundle, or logs | Scan the diff and the built client bundle for keys/tokens/passwords; inspect log samples for raw sensitive data | Scan output with zero findings; log samples show masked values only |
+| TC-04-07 | Every SEC-REQ is numbered, sourced, and traced to a QA test | Cross-check the SEC-REQ list in `04-security.md` against its cited sources (OWASP/ASVS/stack doc) and the QA handover list | Each SEC-REQ-xx names its source and at least one QA test ID; no orphan requirements |
+| TC-04-08 | The post-integration re-check closes the gate honestly | Review the findings list: every finding graded with a reproduction; confirm Critical/High = 0, or a signed risk acceptance exists | Findings section with graded reproductions; gate conclusion stating exactly what was checked and what could not be checked |
 
 ## 10. Common Failures & Anti-Patterns
 

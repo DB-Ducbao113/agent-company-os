@@ -11,7 +11,7 @@
 | 3 | UI/UX (`ui-ux-design`) | BA doc + Architect's frame + design system | Researched design + prototype → Developer FE; states & flows also inform QA cases | `03-design.md` + board/prototype |
 | 4 | Security (`security-engineer`) | Architect's design + contract | Threat model, permission matrix, mandatory security requirements → Developer (must implement); security test list → QA (must execute) | `04-security.md` |
 | 5 | Developer (`developer`) | Spec + BA + contract + design + security requirements | Working implementation + evidence → Code Review, then Integration | code + `05-dev-notes.md` |
-| 5b | Code Review (`code-review`) | Developer's diff + spec/contract | Verdict + findings → Developer (fix loop); APPROVE unlocks Integration | review section in `05-dev-notes.md` or `05-code-review.md` |
+| 5b | Code Review (`code-review`) | Developer's diff + spec/contract | Verdict + findings → Developer (fix loop); APPROVE unlocks Integration | `05-code-review.md` (its own file — never a section inside the developer's notes) |
 | 6 | Integration (`integration-engineer`) | FE + BE builds + API contract | Verified combined system, deviation log, honest mock inventory → QA | `06-integration.md` |
 | 7 | QA (`qa-tester`) | BA acceptance criteria (from Gate 1) + integrated build + Security's test list | Test report with traceability → Release (PASS required); bugs → Developer (fix → re-test loop) | `07-test-report.md` |
 | 8 | Release (`release-devops`) | QA PASS + user's explicit release order | Live, verified release + changelog + rollback plan → the user / end users | `08-release.md` |

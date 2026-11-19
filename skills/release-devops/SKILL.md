@@ -2,7 +2,7 @@
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Release / DevOps — Gate 8
@@ -286,6 +286,21 @@ for users.
 - [ ] The post-release monitoring window passed without exceeding the rollback threshold
 - [ ] The `08-release.md` record is complete: version, times, approver, results, incidents (if any)
 - [ ] The release has been announced to the stakeholders
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop the workflow and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-08-01 | Prerequisites hold before anything ships: QA gate PASS with P0/P1 = 0, and an explicit release order from a named order-giver | Check the QA test report verdict and the recorded release order | QA report reference plus the release order (who, when) in `08-release.md` |
+| TC-08-02 | The release scope matches the approved spec — nothing that has not passed QA is included | Diff the release's change list/commits against the spec scope and the QA-passed build | Scope comparison in the release record with 0 out-of-scope changes |
+| TC-08-03 | The version bump follows SemVer and the changelog follows Keep a Changelog format | Apply the SemVer rules to the change set and inspect the changelog's categories/structure | New version tag plus the changelog entry for this release |
+| TC-08-04 | A rollback plan exists and was written BEFORE deploy, including the data/migration part and a verified backup | Check the plan's creation time against the deploy time; confirm the backup exists and is restorable/readable | Rollback plan file (timestamped before deploy) and backup location with a verification note |
+| TC-08-05 | The target environment is correctly configured: all environment variables present, secrets exist (values never exposed), correct region/domain | Run the environment checklist against the target and inspect effective configuration | Completed environment check in the release record, with no secret values printed |
+| TC-08-06 | The artifact actually deployed is the intended commit/branch per the project's convention | Compare the deployed build's commit SHA reported by the platform with the intended SHA | Deployed SHA recorded in `08-release.md`, matching the intended commit |
+| TC-08-07 | Smoke tests pass on staging before production, and again on the production real URL after deploy, with each flow's result recorded | Execute the defined smoke flows in both environments and log each flow's outcome | Per-flow smoke results for staging and for the production URL |
+| TC-08-08 | The post-release monitoring window passed without breaching the rollback threshold, and the release was announced to stakeholders | Review monitoring/error signals over the defined window against the rollback criteria; confirm the announcement went out | Monitoring summary for the window plus the announcement record in `08-release.md` |
 
 ## 10. Common Failures & Anti-Patterns
 

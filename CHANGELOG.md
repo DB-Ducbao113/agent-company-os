@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [3.2.0] — 2026-11-19
+### Added
+- **Gate Test Cases starter set in every skill** (TC-00…TC-08, 8 cases per gate): each role now ships concrete, verifiable test cases — derived from its own checklist — with verification method and required PASS evidence, operationalizing the Test-Case Gate law.
+- `LICENSE` (MIT), `CONTRIBUTING.md`, `SECURITY.md` — the standard repo files.
+- `docs/GLOSSARY.md` (every term defined once), `docs/FAQ.md` (usage Q&A + troubleshooting), `docs/USER-PROMPTS.md` (ready-made owner commands: approve/rework/stop, respond to a Failure Report, resume a session).
+- `examples/example-project-profile.md` (a complete filled PROJECT-PROFILE) and `examples/example-feature-end-to-end.md` (a feature through all 8 gates, including a Gate 6 FAIL + Failure Report + fix + full re-run).
+### Changed
+- Code Review's verdict now always lives in its own file `05-code-review.md` (naming unified across AGENTS.md, ROLE-CHAIN, and the developer/code-review skills).
+- Versions synchronized at 3.2.0 (skill metadata, plugin marketplace, changelog).
+
 ## [3.1.0] — 2026-11-19
 ### Added
 - **Test-Case Gate law** (Constitution §11–12, MASTER-WORKFLOW, AGENTS.md rule 10): every gate defines its test cases up front; the next gate starts only at 100% PASS; a single FAIL stops the workflow and requires a written Failure Report before anything continues; fixes are verified by re-running the failed case and the full suite.

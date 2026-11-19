@@ -2,7 +2,7 @@
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # UI/UX Design — Gate 3
@@ -228,6 +228,21 @@ Task: "Design the order list screen for an admin web app."
 - [ ] Self-audit complete: heuristics + WCAG AA + anti-slop; anything not passing has a fix plan
 - [ ] Motion (if any) has a clear purpose and respects reduced-motion + device constraints
 - [ ] The artifact opens and can be viewed immediately; `STATUS.md` updated
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define them before working, run all of them, 100% PASS to proceed — any FAIL → stop and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-03-01 | Research basis exists: ≥3 real, shipped products were reviewed for the pattern being designed | Inspect the research table in `03-design.md`; open each cited product and confirm it is a real shipped product of the same type/pattern | Research table with ≥3 products, every row filled: pattern learned / applied where / what was NOT copied + why |
+| TC-03-02 | Every major design decision cites a source | Walk the decision list in `03-design.md`; each major decision (layout, interaction pattern, density) names a product, a DS rule, or an AC | Decision entries each carrying a cited source; zero decisions justified only by "it looks nice" |
+| TC-03-03 | Every BA Acceptance Criterion has a place in the layout | Reconcile the AC list from `01-ba.md` against the layout/board, one AC at a time | AC→layout mapping with no orphan AC; any gap recorded as a question sent back to the BA |
+| TC-03-04 | Only design-system tokens and components are used | Compare every color/spacing/radius/type value in the design against the DS token list, and every component against the component library | Zero off-token values; any new token/component listed separately as a proposed DS extension with a reason |
+| TC-03-05 | All 5 states are designed for every in-scope screen/component | For each screen, check that default, loading, empty, error, and success are drawn or described | 5-state notes/board sections present for every screen in scope |
+| TC-03-06 | Accessibility floor is met (WCAG 2.2 AA) | Measure text/background contrast for body text and status colors; check focus visibility and target sizes against the playbook's WCAG table | Contrast measurements recorded (≥ 4.5:1 normal text, ≥ 3:1 large text); self-audit results section in `03-design.md` |
+| TC-03-07 | Brand integrity: icons and logo come from the project's system only | Inspect the board/prototype for emoji icons, foreign icon sets, or a redrawn logo/wordmark | Zero emoji/foreign icons; logo/wordmark used as-is, referencing the original brand asset |
+| TC-03-08 | Motion and responsive behavior respect the project constraints | Check each animation for a stated purpose and reduced-motion behavior; view the design at the DS breakpoints, including narrow screens | Motion list with purpose + reduced-motion note; breakpoint check results recorded; light option noted when weak devices are in scope |
 
 ## 10. Common Failures & Anti-Patterns
 

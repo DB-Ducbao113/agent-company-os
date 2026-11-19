@@ -133,11 +133,14 @@ skills/                    ← 10 role skills in Agent Skills format, each with:
 workflow/                  ← MASTER-WORKFLOW (gates) + ROLE-CHAIN (who hands what to whom) + ROUTING-MATRIX
 templates/                 ← SPEC, BA, API-CONTRACT, ADR, SECURITY, TEST-REPORT, FAILURE-REPORT, RELEASE, STATUS
 skills-index/              ← External GitHub skills by role + install commands + safety notes
-examples/                  ← One full worked example (a UI redesign)
+examples/                  ← Worked examples: a UI redesign, a feature through all 8 gates (with a real FAIL),
+                             and a filled-in PROJECT-PROFILE to learn the format from
 chat/                      ← Using it on a chat AI: CHAT-GUIDE + START-PROMPTS
 dist/FULL-CONTEXT.md       ← The entire repo in one file, for chat AIs to read in one go
 scripts/                   ← build-full-context.sh (regenerates dist/ after editing skills)
-docs/                      ← How agents use this repo / How to customize / TESTING-GUIDE (verify it yourself)
+docs/                      ← How agents use this repo / How to customize / TESTING-GUIDE (verify it yourself) /
+                             GLOSSARY / FAQ & troubleshooting / USER-PROMPTS (steering commands for the owner)
+LICENSE · CONTRIBUTING.md · SECURITY.md ← MIT license, contribution rules, security policy
 ```
 
 ## Design principles of this repo (learned from the best skill repos)

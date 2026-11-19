@@ -2,7 +2,7 @@
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -231,6 +231,21 @@ The task folder follows the convention in this repo's `AGENTS.md` (folder `tasks
 - [ ] Clarifications record the full Q&A; every `[ASSUMPTION]` carries its risk
 - [ ] The Routing Decision answers all 12 questions; every skipped team has a reason
 - [ ] `STATUS.md` is created, Gate 0 is awaiting approval, and no team has started work yet
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define the test cases before working, run all of them, 100% PASS to proceed — any FAIL → stop the gate and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-00-01 | The original request is stored verbatim in `00-idea.md`, with no paraphrasing or meaning-changing edits | Compare the text in `00-idea.md` against the user's original message word for word | The quoted original in `00-idea.md` matches the source message exactly |
+| TC-00-02 | Long-input coverage is zero-drop: every segment S-xx maps to at least one Requirement Inventory row | Re-walk the numbered segments in `00-idea.md` against the inventory in spec §12 and count unmapped segments | Coverage line in the spec reading "Segments: N · Mapped: N · Unmapped: 0" |
+| TC-00-03 | No clarifying question asks about something already answered in `PROJECT-PROFILE.md` or prior artifacts | Cross-check each question against the profile sections and artifacts found in Step 2 | The question list, with the sources checked noted per question |
+| TC-00-04 | Question discipline holds: ≤5 questions per round, ≤2 rounds, and every core question offers options plus a proposed default | Count questions per round in the recorded Clarifications and inspect their format | The Clarifications Q&A recorded in the spec showing counts and option/default format |
+| TC-00-05 | Playback was confirmed by the user before the spec was written | Check that the spec records the playback and the user's confirmation/date, in the 6-bullet playback format | The playback block plus the recorded user confirmation in the spec |
+| TC-00-06 | The spec is complete per `templates/SPEC.template.md`, and every functional requirement has a REQ-xx ID in EARS form | Walk the spec section by section against the template; non-applicable sections must carry a reason, not be deleted | The completed `00-spec-and-routing.md` with all sections present and REQ-xx IDs throughout |
+| TC-00-07 | Every success criterion is measurable, with no unmeasurable wording ("beautiful", "smooth", "better") left without a metric | Scan each success criterion for a number, threshold, or observable condition QA could re-check | The success-criteria list, each criterion carrying its metric or observable condition |
+| TC-00-08 | The Routing Decision answers all 12 decision-tree questions, gives every skipped team a reason, and states each team's input→output | Check the Routing Decision against `workflow/ROUTING-MATRIX.md` question by question | The Routing Decision table in the spec with 12 recorded answers and per-team input→output |
 
 ## 10. Common Failures & Anti-Patterns
 

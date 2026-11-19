@@ -2,7 +2,7 @@
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Solution Architect — Gate 2
@@ -200,6 +200,21 @@ Feature: **adding online appointment booking to a SaaS website that manages a cl
 - [ ] Every hard-to-reverse decision has an ADR (with a rejected alternative + reason)
 - [ ] Compliance constraints for UI/UX, Dev, and Security are stated explicitly
 - [ ] No decision contradicts PROJECT-PROFILE without an explanatory ADR
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define the test cases before working, run all of them, 100% PASS to proceed — any FAIL → stop the gate and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-02-01 | Every current-state claim in the arch file rests on a real survey, including all relevant branches | Check the current-state section for the inspected file/folder paths and the list of branches checked behind each claim; claims without evidence must be marked `[UNVERIFIED]` | The survey section of `02-arch-*.md` with path evidence per claim |
+| TC-02-02 | The module map is complete: New, Modified, and Do Not Touch categories are all populated | Inspect the module map and confirm each of the three categories has entries (or an explicit "none" with a reason) | The module map in `02-arch-*.md` showing all three categories |
+| TC-02-03 | The data flows include at least one important error flow, not only happy paths | Read the flow descriptions and identify the error flow: where the error originates, where it stops, and what the caller receives | The flow section of `02-arch-*.md` documenting the error flow end to end |
+| TC-02-04 | Every endpoint in the contract is fully specified: auth, request validation, success response, and error responses with HTTP status plus a stable error code | Walk `02-api-contract.md` endpoint by endpoint against that four-part requirement | The contract file with complete per-endpoint entries, including stable error codes |
+| TC-02-05 | The contract settles all global conventions: common error format, pagination, UTC time format, idempotency where needed, and versioning strategy | Check the contract's conventions section for each of the five items | The conventions section of `02-api-contract.md` covering all five items |
+| TC-02-06 | Both FE and BE reviewed and confirmed the contract before it was locked | Look for the recorded confirmation from each side (review note, sign-off entry, or STATUS record) predating any implementation work | The confirmation records attached to `02-api-contract.md` / in `STATUS.md` |
+| TC-02-07 | The data model reconciles with the BA's state model, and concurrency-critical integrity rules are enforced by DB constraints, not code checks alone | Map each BA state to its storage representation; for each uniqueness/state rule in `01-ba.md`, check a matching DB constraint exists in the model | The data-model section of `02-arch-be.md` listing states, constraints, and where each rule is enforced |
+| TC-02-08 | If live data changes, the migration plan is safe: expand → migrate → contract sequencing, with backup, per-step rollback, and a volume estimate | Read the migration section and check for all four elements (sequence, backup, rollback, volume estimate) | The migration section of `02-arch-be.md` containing all four elements |
 
 ## 10. Common Failures & Anti-Patterns
 

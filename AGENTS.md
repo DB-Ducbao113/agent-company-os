@@ -55,14 +55,16 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 | Which roles a task needs | `workflow/ROUTING-MATRIX.md` |
 | Writing a spec | `templates/SPEC.template.md` |
 | Finding an external skill for a role | `skills-index/SKILLS-INDEX.md` |
-| A worked example | `examples/example-redesign-ui.md` |
+| A worked example | `examples/example-redesign-ui.md`, `examples/example-feature-end-to-end.md` |
+| A test case failed | `templates/FAILURE-REPORT.template.md` + the Test-Case Gate law in `workflow/MASTER-WORKFLOW.md` |
+| A term is unclear | `docs/GLOSSARY.md` |
 
 ## Working folder convention for each task (the agent creates this when Gate 0 passes)
 
 ```
 tasks/<YYYY-MM-DD>-<slug>/
   00-idea.md  00-spec-and-routing.md  01-ba.md  02-arch-*.md  02-api-contract.md
-  03-design.md  04-security.md  05-dev-notes.md  06-integration.md
-  07-test-report.md  08-release.md  STATUS.md
+  03-design.md  04-security.md  05-dev-notes.md  05-code-review.md  06-integration.md
+  07-test-report.md  08-release.md  FAILURE-REPORT-[nn].md (only when a failure occurs)  STATUS.md
 ```
 Files outside a task's routing are not created — and the Routing Decision must state why each skipped role was skipped.

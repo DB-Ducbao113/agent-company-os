@@ -2,7 +2,7 @@
 name: business-analyst
 description: Turn an approved Gate 0 spec into precise, testable business requirements. Use for requirements analysis, product briefs, PRDs, user stories, acceptance criteria, business rules, state models, permission matrices, and prioritization — whenever business logic is ambiguous, multi-actor, stateful, or involves money, quotas, approvals, or workflows. Follows BABOK v3, ISO 29148, INVEST, MoSCoW, and Given/When/Then (BDD/Gherkin). Produces 01-ba.md that QA can test line-by-line. Never chooses technology, architecture, UI layout, or database design. Keywords: BA, requirements, user story, acceptance criteria, PRD, business rules, use case, state machine, MoSCoW.
 license: MIT
-metadata: {version: "3.0.0"}
+metadata: {version: "3.2.0"}
 ---
 
 # Business Analyst — Gate 1
@@ -197,6 +197,21 @@ Feature: **online appointment booking for a small clinic, on a SaaS website.**
 - [ ] MoSCoW is assigned; the Must set is the true minimum
 - [ ] The `[TBC]`/`[ASSUMPTION]`/`[CONFLICT]` list has an owner and a blocking level for each item
 - [ ] The file contains no technology/architecture/UI decisions
+
+### Gate Test Cases (starter set — extend for each task)
+
+These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): define the test cases before working, run all of them, 100% PASS to proceed — any FAIL → stop the gate and issue a Failure Report.
+
+| ID | Test case | How to verify | Evidence for PASS |
+|---|---|---|---|
+| TC-01-01 | Work started only on an APPROVED spec: the input spec's status is APPROVED with a confirmed playback, not DRAFT | Open `00-spec-and-routing.md` and check its status and the recorded playback confirmation before writing anything | The spec's APPROVED status line and confirmation record cited at the head of `01-ba.md` |
+| TC-01-02 | Every business rule containing a number states the number's source | Sample every BR-xx with a numeric value and trace it to a Clarifications answer, an existing policy, or a `[PROPOSED — VALIDATE]` label | The BR list in `01-ba.md`, each numbered rule carrying its source citation |
+| TC-01-03 | Every user story passes INVEST, and stories failing Small/Testable were split with dependencies recorded | Check each US-xx against the INVEST checklist in `references/playbook.md` | Per-story INVEST check results recorded in `01-ba.md` |
+| TC-01-04 | Every story has ≥3 happy-path AC and ≥2 boundary/error AC, all in Given/When/Then form with an observable "Then" | Count the AC per story and inspect each AC's format and "Then" clause | The AC tables in `01-ba.md` showing the per-story counts and G/W/T format |
+| TC-01-05 | Traceability is two-way and orphan-free: every US traces to a REQ-xx, every AC traces to a US | Walk the ID references in both directions (REQ → US → AC and back) and list any orphan | The REQ/US/AC ID references in `01-ba.md` with no orphan found in the walk |
+| TC-01-06 | The state model and the AC agree in both directions, and forbidden transitions are explicitly recorded | List every state named in any AC and check it exists in the model; list every model state and check it appears in AC; check the forbidden-transitions list is non-empty where a lifecycle exists | The transition table in `01-ba.md` plus the recorded forbidden transitions |
+| TC-01-07 | The permission matrix has no blank cells, and every unclear cell is marked `[TBC]` rather than defaulted to "Allowed" | Scan the actor × action matrix cell by cell for blanks and for unjustified "Allowed" entries | The completed permission matrix in `01-ba.md` with zero blank cells |
+| TC-01-08 | The document contains no HOW: no technology, architecture, table, or API decisions appear anywhere in `01-ba.md` | Search the document text for technology/table/API terms and read any hits in context | The final `01-ba.md` text, with the term search returning no genuine HOW content |
 
 ## 10. Common Failures & Anti-Patterns
 
