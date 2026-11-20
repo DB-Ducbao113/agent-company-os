@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [3.6.2] — 2026-11-20
+### Added — Deep Work Protocol (heavy tasks)
+Owner requirement: agents must work in depth and detail — however long it takes — with top-tier output; heavy tasks (a 3D scene was the example) cannot reach that bar inside a single 5–15-minute turn. New `workflow/DEEP-WORK-PROTOCOL.md` makes heavy work a different execution class:
+- **Classification at Gate 0** (Constitution §16, AGENTS rule 15, MASTER-WORKFLOW, orchestrator checklist + anti-pattern): multi-session, rich-artifact, iterative/visual-quality, or long-compute tasks are **Deep Work**; misclassifying them as Standard is a Gate 0 defect.
+- **Five laws:** (1) production by re-runnable pipeline scripts, not handwork; (2) stages ending in on-disk checkpoints (artifact + STATUS.md + verification) — no stage lives only in chat; (3) iteration loops scored against a **pre-declared quality rubric** by a checker who is not the maker, with multi-angle evidence; (4) **budget honesty** — on budget exhaustion the agent checkpoints and reports the gap; lowering the quality bar, rubric threshold, or scope requires the user written approval; (5) long-running compute runs as background jobs with logs, and fixes go into the pipeline, never into hand-patched outputs.
+- New `templates/DEEP-WORK-PLAN.template.md` (classification rationale, pipeline table, stages/checkpoints, rubric, budgets, iteration log, current-state block) and a worked 3D-scene example inside the protocol.
+- **WT-12** added to the workflow test suite and `docs/EVALS.md`: a heavy task must be classified Deep Work with a plan — not one-shotted.
+
+## [3.6.1] — 2026-11-20
+### Fixed — verdict integrity (from a real incident)
+A QA gate was concluded PASS from a green technical suite (40/40 browser assertions on login/modal/XSS at two viewports) while mandatory coverage — the loading state and responsive breadth — had never been exercised. The rules existed; the verdict format let the gap stay invisible. This patch makes PASS structurally hard to fake:
+- **Coverage law** (Constitution §15, AGENTS rule 14, MASTER-WORKFLOW Test-Case Gate law §7): every gate verdict requires a **coverage matrix** — each mandatory item mapped to an executed test case with a real evidence artifact. An unmapped mandatory item is automatically BLOCKED; 100% of an incomplete suite is not a PASS.
+- **Claim-scoping law** (law §8): conclusions state their exact scope; an aggregate metric never proves an untested criterion. The failure mode is named **aggregate-green substitution** and added to the QA skill anti-patterns with the incident as its example; GATE-REPORT gains a mandatory **"Not tested / not covered"** section (unaccepted mandatory gaps block PASS).
+- **Machine enforcement:** new `scripts/verify-gate.py` validates a gate report mechanically (matrix completeness, evidence files exist and are non-empty, results all PASS, gap markers, tally consistency) and exits non-zero on any violation — a report it rejects is not submittable for the user verdict. Worked examples (one passing, one reproducing the incident) in `examples/gate-verification/`.
+- **WT-11** added to the workflow test suite and `docs/EVALS.md`: a green-but-narrow suite must not be inflated into a broader PASS.
+### Fixed — packaging
+- ChatGPT plugin ZIP rebuilt to the archive layout ChatGPT actually validates: manifest at the archive root under `.codex-plugin/plugin.json` (plus `.agent-plugin/` and `.claude-plugin/` copies), `skills/*/SKILL.md` at the root, and the required `interface` object (displayName, shortDescription, longDescription, developerName, category, capabilities) in the manifest.
+
 ## [3.6.0] — 2026-11-19
 ### Fixed — workflow logic (internal audit + GitHub benchmark vs BMAD / Spec Kit / Superpowers)
 - Integration can no longer issue a "conditional PASS" (it contradicted the Test-Case Gate law); conclusions are PASS/FAIL, with only a user-written override in STATUS.md as exception. Integration must also verify Code Review APPROVE before starting.

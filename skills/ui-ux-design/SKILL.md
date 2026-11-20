@@ -2,7 +2,7 @@
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # UI/UX Design — Gate 3

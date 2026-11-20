@@ -2,7 +2,7 @@
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Release / DevOps — Gate 8

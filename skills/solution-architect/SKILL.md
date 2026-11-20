@@ -2,7 +2,7 @@
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Solution Architect — Gate 2

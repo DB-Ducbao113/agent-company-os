@@ -2,7 +2,7 @@
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -262,6 +262,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 | Skipping Security/QA "to go faster" when the task touches money/permissions | That is exactly where the biggest risk lives | Question 6 of the decision tree admits no exceptions |
 | A playback like "I'll do a really good job" | It confirms nothing | Use the 6-bullet playback format in Section 4 |
 | Leaving the clarification Q&A only in chat | The next session/agent loses the context | Record it in the spec's Clarifications section |
+| Treating a heavy task (3D, full app, video) as one turn of work | The agent cuts quality invisibly to fit the turn; the user gets a rushed artifact labeled "done" | Classify it Deep Work at Gate 0: pipeline, checkpoints, rubric-scored iterations, budget honesty (Deep Work Protocol) |
 
 ## 11. Handoff to the Next Role
 
@@ -277,6 +278,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 - [ ] The spec is APPROVED, and no blocking `[TBC]` (touching money/permissions/data) remains ownerless
 - [ ] The Routing Decision states explicitly what input the receiving team gets and what artifact it must return
 - [ ] All `[ASSUMPTION]` items are listed where the receiver will see them, each with its risk
+- [ ] The task's workload class (Standard / Deep Work) is decided and recorded; Deep Work has a Deep Work Plan with pipeline, checkpoints, rubric, and budgets (`workflow/DEEP-WORK-PROTOCOL.md`)
 
 **(d) Acceptance criteria the receiving role will check (what gets your work sent back):** the spec is internally consistent; every REQ is testable; the scope in the spec matches the approved playback. If any of these fail, the receiver sends it back naming the specific REQ/section in STATUS, and Gate 0 reopens — the receiver does not silently fix the spec themselves.
 

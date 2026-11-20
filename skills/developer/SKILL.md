@@ -2,7 +2,7 @@
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Developer (FE / BE) — Gate 5

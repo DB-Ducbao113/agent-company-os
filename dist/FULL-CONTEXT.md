@@ -4,7 +4,7 @@ This file concatenates the whole Agent Company OS repository into one document s
 can read it in a single fetch or upload. Rules: follow AGENTS.md first; every new task starts
 at the orchestrator-intake skill; read a role's section before acting in that role.
 
-Generated: 2026-11-19
+Generated: 2026-11-20
 
 ---
 
@@ -65,6 +65,18 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 13. **Resume protocol:** At the start of any session on an existing task, first reconstruct where the task
     stands from its task folder — `STATUS.md`, the artifacts present, and the gate verdicts recorded — and
     state the next action before doing anything. Never restart a task from memory or from chat history alone.
+14. **Coverage & claim-scoping (no PASS without coverage):** A gate verdict requires a **coverage matrix**
+    (every mandatory checklist item → executed test case → evidence artifact → result). A mandatory item
+    with no test case is automatically BLOCKED — 100% of an incomplete suite is not a PASS. Conclusions
+    must state their exact scope; an aggregate metric never proves an untested criterion
+    ("aggregate-green substitution" is a process violation). Every gate report lists what was **not**
+    tested. Gate reports are machine-checked with `scripts/verify-gate.py` before they reach the user.
+15. **Deep Work (heavy tasks):** At Gate 0, classify the task: multi-session, rich-artifact (3D, full app,
+    video, long document), iterative/visual-quality, or long-compute work is **Deep Work** and follows
+    `workflow/DEEP-WORK-PROTOCOL.md` — a Deep Work Plan (`templates/DEEP-WORK-PLAN.template.md`),
+    production by re-runnable pipeline scripts, on-disk checkpoints per stage, and iterations scored
+    against a pre-declared rubric by a checker. When budget runs out: checkpoint and report the gap —
+    never quietly lower the quality bar or the scope to fit.
 
 ## Quick Map — what to read when
 
@@ -78,6 +90,7 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 | Finding an external skill for a role | `skills-index/SKILLS-INDEX.md` |
 | A worked example | `examples/example-redesign-ui.md`, `examples/example-feature-end-to-end.md` |
 | A test case failed | `templates/FAILURE-REPORT.template.md` + the Test-Case Gate law in `workflow/MASTER-WORKFLOW.md` |
+| A heavy task (3D, full app, video, multi-session) | `workflow/DEEP-WORK-PROTOCOL.md` + `templates/DEEP-WORK-PLAN.template.md` |
 | A term is unclear | `docs/GLOSSARY.md` |
 
 ## Working folder convention for each task (the agent creates this when Gate 0 passes)
@@ -115,6 +128,8 @@ Files outside a task's routing are not created — and the Routing Decision must
 12. **Every failure is reported, immediately and in writing.** A failure produces a Failure Report (what failed, the evidence, the suspected cause, the owning role, what is needed to fix it, what the user must decide) before any further work. Hiding, softening, or quietly retrying past a failure is a process violation.
 13. **The user's input is processed exhaustively.** Long or detailed instructions are decomposed item by item (Requirement Inventory + coverage check): every clause of the user's input maps to a requirement, a question, or an explicit out-of-scope note. Nothing is dropped silently, and nothing is "summarized away".
 14. **Completion claims name their level.** Completion is a ladder — **WRITTEN → SYNTAX-CHECKED → RUN → TESTED → DEPLOYED → USER-ACCEPTED** — and any claim that work is "done" must state which level it has reached, with the evidence for that level. A lower level is never reported as a higher one.
+15. **Coverage before verdicts; claims never exceed coverage.** A gate may conclude PASS only when every mandatory item of that gate is mapped, in a coverage matrix, to an executed test case with a real evidence artifact. An unmapped mandatory item is automatically BLOCKED. Conclusions are scoped to exactly what was executed — an aggregate metric (a passing suite, a percentage) is evidence about its own cases only, never about untested criteria — and every gate report lists what was **not** tested. (Enforced mechanically by `scripts/verify-gate.py`; see the Test-Case Gate law in `workflow/MASTER-WORKFLOW.md`.)
+16. **Heavy work is deep work: pipeline, checkpoints, scored iteration.** A task classified as Deep Work (see `workflow/DEEP-WORK-PROTOCOL.md`) is never executed as a single turn: it is produced by a re-runnable pipeline, decomposed into stages that each end in an on-disk checkpoint, and refined through iterations scored against a pre-declared quality rubric by a checker who is not the maker. When a budget (iterations, sessions, time) runs out, the agent checkpoints and reports the gap — lowering the quality bar, the rubric threshold, or the scope to fit the budget requires the user's written approval. Speed is negotiable; the quality bar is not.
 
 
 ---
@@ -195,6 +210,9 @@ Every gate works test-first at the process level:
 4. **One FAIL = full stop.** The workflow halts at that gate. The responsible role immediately writes a **Failure Report** (template: `templates/FAILURE-REPORT.template.md`) stating: which test case failed, the expected vs. actual result, the evidence, the suspected cause, the owning role of the root cause, the proposed fix, and what (if anything) the user must decide. The report is surfaced to the user before anything else continues.
 5. **Fix → re-run the failed case AND the full gate suite.** A fix is verified by re-running the whole gate's test cases (not only the one that failed), because fixes regress neighbors. Only a clean 100% PASS reopens the gate.
 6. **Never** skip a failing case, mark it "known issue" to proceed, weaken a test case to make it pass, or continue to the next gate "in parallel while fixing" — unless the user explicitly overrides in writing, and that override is recorded in STATUS.md with the risk accepted.
+7. **Coverage law — a verdict is only as wide as its coverage matrix.** A gate's test cases must cover **every mandatory item** of the gate (the role's gate checklist + the spec's success criteria + any standard the gate invokes — e.g. for UI work, all five interface states: normal, loading, empty, error, success). The gate report must contain a **coverage matrix** mapping each mandatory item → the test case(s) that check it → the evidence artifact → the result. A mandatory item with **no test case is automatically BLOCKED** — the gate cannot be PASS until coverage is complete or the user accepts the gap in writing in STATUS.md. Running 100% of an incomplete suite proves only the suite, never the gate.
+8. **Claim-scoping law — conclusions never exceed what was executed.** Every result claim states its scope exactly: the cases run, the environment, the dimensions covered (e.g. "40/40 assertions PASS — guest login, modal, date edit, XSS, permissions; viewports 390×844 and 1280×800; loading state not exercised"). An aggregate metric must never be presented as proof of a broader quality claim its cases did not cover. Substituting a green metric for an untested criterion is a named process violation (**aggregate-green substitution** — see the qa-tester skill's anti-patterns). Reports also carry a mandatory **"Not tested / not covered"** list; anything on it that belongs to the gate's mandatory scope blocks PASS exactly like a BLOCKED case.
+9. **Machine verification.** A gate report that follows `templates/GATE-REPORT.template.md` can be checked mechanically with `scripts/verify-gate.py <report.md>`: it validates the coverage matrix (every row has a case, an existing non-empty evidence file, and a PASS result), the not-tested list, and the status consistency, and exits non-zero on any violation. A report that fails the script is not submittable for the user's verdict, whatever its text claims.
 
 ## Pre-Implementation Consistency Audit (after Gate 4, before Gate 5)
 
@@ -217,6 +235,9 @@ Before any code is written, the complete planning set gets one cross-check as a 
 Fixing text/data/typos, display-only config changes: shortened Orchestrator (≤2 questions) → Developer → QA verifies against the source.
 Conditions: no behavior change, no layout change, no touching auth/data/money. Outside those conditions → full flow.
 
+## Deep Work (heavy tasks — the fast lane's opposite)
+At Gate 0 the Orchestrator classifies the task. Work that is multi-session, produces a rich artifact (3D scene, full app, video, long document), has iterative/visual quality, or needs long-running compute is **Deep Work** and runs under `workflow/DEEP-WORK-PROTOCOL.md`: a Deep Work Plan with a re-runnable production pipeline, per-stage on-disk checkpoints, a pre-declared quality rubric scored by a checker across iterations, and declared budgets. Budget exhaustion means checkpoint + report — never a silent cut to quality or scope. Misclassifying Deep Work as Standard (or fast lane) is a Gate 0 defect.
+
 ## Correct-course (requirements change mid-task)
 Requirements changing mid-flight is normal; absorbing them silently is not.
 1. **Record the change** in the spec (new version) and in STATUS.md — what changed, who requested it, when.
@@ -226,6 +247,117 @@ Requirements changing mid-flight is normal; absorbing them silently is not.
 
 ## Retrospective (after Gate 8)
 Once a task is released (or closed), the Orchestrator appends a short lessons record to the task folder: what went well, what failed or surprised, which assumptions proved wrong, and what the company should do differently next time. Lessons that are durable (project facts, conventions, recurring pitfalls) are **proposed** as updates to `constitution/PROJECT-PROFILE.md` — the user approves them before they are written (see AGENTS.md).
+
+
+---
+
+# ===== DEEP WORK PROTOCOL — workflow/DEEP-WORK-PROTOCOL.md =====
+
+# DEEP WORK PROTOCOL — Heavy tasks, top-tier output
+
+Most agent failures on heavy work share one root cause: the task is treated as a
+single conversational turn, so the agent cuts quality to fit the turn. This
+protocol is the opposite contract: **heavy work runs as a multi-stage pipeline
+with checkpoints, scripted production, and scored iteration — however many
+sessions it takes.** Speed is negotiable; the quality bar is not.
+
+## When a task is Deep Work (classification)
+
+The Orchestrator classifies every task at Gate 0 / routing and records the
+class in the Spec and STATUS.md. A task is **Deep Work** when ANY of these hold:
+
+- It is expected to exceed one session, or roughly 30+ tool actions.
+- It produces a rich artifact: a 3D scene/model, a full application, a long
+  document or deck, a video, a data pipeline.
+- Its quality is **iterative or visual** — "good" is judged by looking,
+  comparing, and refining, not by a single check.
+- It needs long-running computation: rendering, building, training, encoding,
+  large test suites.
+- The cost of a mediocre result is high (public launch, client-facing, money).
+
+Everything else is Standard work and follows the normal gate flow (or the fast
+lane). Misclassifying Deep Work as Standard is a Gate 0 defect.
+
+## The five laws
+
+### 1. Pipeline, not handwork
+Heavy production is done by **scripts and pipelines the agent writes** —
+generator code (e.g. Blender Python, build scripts, scene code, document
+generators) that is deterministic, parameterized, and re-runnable end-to-end.
+The agent directs and verifies; the machine does the long labor. One-off manual
+manipulation is for exploration only — anything that survives into the result
+must be reproducible by re-running the pipeline.
+
+### 2. Stages with checkpoints on disk
+The work is decomposed into stages in a **Deep Work Plan**
+(`templates/DEEP-WORK-PLAN.template.md`). Every stage ends with:
+(a) its artifact file(s) saved on disk, (b) STATUS.md updated — stage, evidence,
+next step, (c) the stage's verification result. **No stage may exist only in
+chat context.** A session that ends mid-task leaves a clean checkpoint, never
+a half-state.
+
+### 3. Scored iteration loop
+Before production starts, the plan defines a **quality rubric**: the criteria
+that make the result top-tier for THIS task, each with a pass threshold
+(e.g. for a 3D scene: silhouette/proportion match to reference, material
+realism, lighting, clean geometry, renders from 3+ angles). Each iteration is:
+produce → capture evidence (renders, screenshots, measurements — from multiple
+angles/states, not one flattering view) → a **checker** (not the maker) scores
+against the rubric → a written fix list → next iteration. The loop ends when
+the rubric passes or the iteration budget is spent. Ending below threshold is
+reported as REWORK with the gap list — never silently accepted.
+
+### 4. Budget honesty — no silent quality cuts
+Budgets (iterations, sessions, compute time) are declared in the plan up
+front. When a budget runs low, the agent finishes the current checkpoint
+cleanly, updates STATUS.md, and reports: what is done, the rubric score so
+far, what is missing, and what the next session should do. **Lowering the
+quality bar, the rubric threshold, or the scope to fit a budget requires the
+user's written approval** (the mid-task approval law) — an agent that quietly
+ships 60% as "done" has failed the task even if the artifact looks plausible.
+
+### 5. Long-running compute discipline
+Renders, builds, and other long jobs run as background jobs with logs. The
+agent monitors the logs; it does not block the session narrating a progress
+bar. When a job fails, the fix goes into the **pipeline** and the job re-runs —
+outputs are never hand-patched, because a hand-patched output cannot be
+reproduced and hides the pipeline defect that will recur.
+
+## Sessions and resume
+
+- **Session start:** read STATUS.md and the Deep Work Plan; verify the last
+  checkpoint's artifacts actually exist on disk; continue from the next stage.
+- **Session end:** leave a checkpoint summary in STATUS.md — stage reached,
+  rubric score, evidence paths, exact next action.
+- The plan is a living artifact: stage changes follow the correct-course
+  protocol (record, assess blast radius, re-approve scope changes).
+
+## Anti-patterns
+
+| Anti-pattern | Why it fails | The right way |
+|---|---|---|
+| One-shot heroics — attempting the whole heavy task in a single turn | Quality is cut invisibly to fit the turn | Classify Deep Work; pipeline + stages + checkpoints |
+| Hand-crafting the artifact instead of scripting its production | Not reproducible; every fix risks the whole result | Generator pipeline; fix the pipeline, re-run it |
+| "Looks good" with no rubric or one flattering render | Unverifiable, self-graded quality | Pre-declared rubric, multi-angle evidence, checker scores it |
+| Quietly shrinking scope/threshold when time runs short | The user receives 60% labeled as done | Budget honesty: checkpoint, report the gap, ask |
+| State kept only in the conversation | Session loss = work loss | Artifacts + STATUS.md on disk at every stage |
+| Blocking the session on a long render/build | Burns the session on waiting | Background job + logs; verify from the logs |
+
+## Worked mini-example — a 3D product scene
+
+1. **Classify:** Deep Work (rich artifact, visual quality, render compute).
+2. **Plan:** stages = brief/references → blockout → detail pass → materials &
+   lighting → render set → QC. Rubric: proportions match reference (3-angle
+   renders), materials read correctly under the key light, no visible geometry
+   defects, poly budget met. Iteration budget: 4. 
+3. **Pipeline:** one Blender Python script builds the scene from parameters;
+   a render script outputs the 3 standard angles.
+4. **Loop:** iteration 1 scores 3/5 rubric criteria → fix list (bevel widths,
+   key-light angle) → script parameters change → re-run → iteration 2 scores
+   5/5 → gate evidence = the render set + the scored rubric.
+5. **Budget event:** if iteration 4 still failed a criterion, the report says
+   exactly which one and why — the user decides: more budget, lower threshold,
+   or accept with the gap recorded.
 
 
 ---
@@ -312,7 +444,7 @@ Once a task is released (or closed), the Orchestrator appends a short lessons re
 name: business-analyst
 description: Turn an approved Gate 0 spec into precise, testable business requirements. Use for requirements analysis, product briefs, PRDs, user stories, acceptance criteria, business rules, state models, permission matrices, and prioritization — whenever business logic is ambiguous, multi-actor, stateful, or involves money, quotas, approvals, or workflows. Follows BABOK v3, ISO 29148, INVEST, MoSCoW, and Given/When/Then (BDD/Gherkin). Produces 01-ba.md that QA can test line-by-line. Never chooses technology, architecture, UI layout, or database design. Keywords: BA, requirements, user story, acceptance criteria, PRD, business rules, use case, state machine, MoSCoW.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Business Analyst — Gate 1
@@ -860,7 +992,7 @@ A re-eval that misses the threshold is a failed gate, handled like any other: Fa
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)
@@ -1436,7 +1568,7 @@ Two closing rules:
 name: developer
 description: Implement features and bug fixes exactly to spec, architecture, design, and API contract, for frontend and backend. Use for coding tasks after the relevant gates pass — building screens and components, implementing APIs and business logic, data access and migrations, and fixing bugs with a reproduced test first. Works in small vertical slices, test-first where practical (TDD red-green-refactor), follows the existing codebase conventions and design system, and reports raw verifiable evidence (commands run, logs, screenshots) instead of claiming success. Triggers: "implement", "code", "build feature", "fix bug", "frontend", "backend", "API". Never redesigns, never changes contracts or business rules unilaterally, never reviews its own code.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Developer (FE / BE) — Gate 5
@@ -2040,7 +2172,7 @@ right, not a failure.
 name: integration-engineer
 description: Verify that separately built parts actually work together against the agreed API contract. Use after frontend and backend (or a third-party integration) are built and before QA: field-by-field contract verification including error cases, end-to-end backbone flows on the real running system, honest mock inventory, and environment checks (env vars, CORS, timezone, region). Triggers: integration, contract test, API mismatch, FE-BE integration, E2E backbone check, mock inventory, deviation log. A page that merely renders, or a bare HTTP 200, never counts as integrated.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Integration Engineer — Gate 6
@@ -2707,7 +2839,7 @@ Run before go-live; every "unknown" is a launch blocker for money/auth paths.
 name: orchestrator-intake
 description: Entry point for EVERY new task. Use when a user gives a new, brief, or vague request — "build X", "redesign the UI", "add a feature", "fix this", a feature idea, a redesign, a bug report, or any work request — before any analysis, design, planning, or code. Clarifies intent with targeted questions (never guesses), confirms understanding via playback, writes a Spec-Driven Development spec with EARS requirements and recorded clarifications, and routes the work to the right specialist role-skills (BA, architect, UI/UX, security, developer, integration, QA, release) using a 12-question decision tree. Keywords: intake, clarify, clarification questions, spec, SDD, routing, triage, gate 0, new task, vague request.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Orchestrator / Intake — Gate 0
@@ -2967,6 +3099,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 | Skipping Security/QA "to go faster" when the task touches money/permissions | That is exactly where the biggest risk lives | Question 6 of the decision tree admits no exceptions |
 | A playback like "I'll do a really good job" | It confirms nothing | Use the 6-bullet playback format in Section 4 |
 | Leaving the clarification Q&A only in chat | The next session/agent loses the context | Record it in the spec's Clarifications section |
+| Treating a heavy task (3D, full app, video) as one turn of work | The agent cuts quality invisibly to fit the turn; the user gets a rushed artifact labeled "done" | Classify it Deep Work at Gate 0: pipeline, checkpoints, rubric-scored iterations, budget honesty (Deep Work Protocol) |
 
 ## 11. Handoff to the Next Role
 
@@ -2982,6 +3115,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 - [ ] The spec is APPROVED, and no blocking `[TBC]` (touching money/permissions/data) remains ownerless
 - [ ] The Routing Decision states explicitly what input the receiving team gets and what artifact it must return
 - [ ] All `[ASSUMPTION]` items are listed where the receiver will see them, each with its risk
+- [ ] The task's workload class (Standard / Deep Work) is decided and recorded; Deep Work has a Deep Work Plan with pipeline, checkpoints, rubric, and budgets (`workflow/DEEP-WORK-PROTOCOL.md`)
 
 **(d) Acceptance criteria the receiving role will check (what gets your work sent back):** the spec is internally consistent; every REQ is testable; the scope in the spec matches the approved playback. If any of these fail, the receiver sends it back naming the specific REQ/section in STATUS, and Gate 0 reopens — the receiver does not silently fix the spec themselves.
 
@@ -3290,7 +3424,7 @@ A summary-style intake would likely keep S-01/S-02 and lose S-05 and S-07 — ex
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # QA / Tester — Gate 7
@@ -3592,6 +3726,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 | Closing a bug when Dev says "fixed" | The bug is still there but passes the gate | Close only after re-running the reproducing case and it passes |
 | Cutting security tests when time runs short | Permission/data holes reach production | The mandatory security group is never cut |
 | A report that only says "PASS" with no numbers | Nobody knows what was tested and what was missed | Coverage numbers + the list of what was not verified |
+| **Aggregate-green substitution** — presenting a passing metric (e.g. "40/40 assertions") as proof of a broader quality claim its cases never covered (real incident, 2026-11-20: a login/modal/XSS suite at 2 viewports was concluded as overall frontend PASS while the loading state and responsive breadth were never exercised) | Untested mandatory criteria ship under a green verdict; the failure surfaces in production, not in the report | Coverage matrix first (every mandatory item → case → evidence); conclusions scoped to exactly what ran; uncovered mandatory items are BLOCKED, never silently absorbed into a PASS |
 
 ## 11. Handoff to the Next Role
 
@@ -3615,6 +3750,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 - [ ] Fixed bugs show re-verification evidence, not just a "fixed" status from Dev
 - [ ] The security group's results are recorded separately and every FAIL has been copied to Security
 - [ ] The conclusion states the exact build, environment, and scope it applies to
+- [ ] The report's coverage matrix maps every mandatory item (incl. all five UI states for UI work) to an executed case with evidence; uncovered mandatory items are BLOCKED, and `scripts/verify-gate.py` passes on the report
 - [ ] Open risks for Release (unverified areas, monitoring suggestions) are written in the report
 
 ### (d) Acceptance criteria the receiving role will check
@@ -3987,7 +4123,7 @@ AI generation is now a normal source of both production code and test code. The 
 name: release-devops
 description: Ship approved work safely. Use for versioning (SemVer), changelogs, release notes, deployment checklists, environment and secret handling, staging-then-production rollout, smoke tests on the real deployed URL, post-release monitoring, incident response, and rollback plans written before deploy. Triggers: release, deploy, version, changelog, rollback, smoke test, production. A release is not done when it deploys — it is done when it is verified live, monitored, and can still be rolled back.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Release / DevOps — Gate 8
@@ -4925,7 +5061,7 @@ Run at the release gate; any unchecked box is either fixed or converted into a n
 name: security-engineer
 description: Security engineering for software tasks: threat modeling, security requirements, and security review before and after code. Use whenever a task touches authentication, login, authorization, permissions, roles, personal or sensitive data, money, payments, billing, file uploads, secrets, API keys, tokens, sessions, cryptography, third-party integrations, webhooks, or public APIs. Applies OWASP Top 10 (2025), OWASP ASVS 5.0.0, OWASP API Security (BOLA/IDOR), and STRIDE threat modeling; produces a permission matrix and hands mandatory security test cases to QA. Triggers: "security", "threat model", "OWASP", "permissions", "auth", "login", "payment", "secret", "vulnerability", "security audit". Mandatory whenever routing flags it — never skippable for speed.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Security Engineer — Gate 4 (before code) + Re-Check After Integration
@@ -5606,7 +5742,7 @@ When two profiles collide (e.g. a small team shipping payments), the higher dept
 name: solution-architect
 description: Design the technical structure of a feature or system before any code is written. Use when a task changes system structure, modules, layout/component systems, routing, state management, APIs, integrations, or data models; when an API contract must be designed contract-first; when an existing architecture or design system must be complied with; or when a significant technical decision needs an Architecture Decision Record (ADR). Produces C4 diagrams (levels 1-2 by default), a signed API contract including error responses and error codes, data models with migration safety, and compliance boundaries for UI/UX and developers. Always inspects the real existing codebase and all relevant branches first; never claims something is absent without checking. Keywords: architecture, C4, ADR, API contract, OpenAPI, system design, data model, migration, contract-first.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Solution Architect — Gate 2
@@ -6143,7 +6279,7 @@ Rule: an NFR without a number is recorded as an `[ASSUMPTION]` together with the
 name: ui-ux-design
 description: Design, redesign, and review user interfaces with real design intelligence instead of generic AI defaults. Use whenever a task changes how something looks, feels, moves, or is interacted with — new screens, UI redesign, components, design systems, color palettes, typography, layout, spacing, charts, forms, icons, motion/animation, dark mode, responsive behavior, accessibility or WCAG review, and UI polish. Triggers: "design", "redesign", "UI", "UX", "make it look better", "review UI", "accessibility", "design system". Research real shipped products first, design layout before detail, cover all 5 UI states, run an anti-AI-slop audit, and respect the project's own design system and brand above outside inspiration.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # UI/UX Design — Gate 3
@@ -6951,6 +7087,50 @@ If ≥3 of these signs appear in one artifact → treat it as not yet audited, a
 
 ---
 
+# ===== TEMPLATE — templates/DEEP-WORK-PLAN.template.md =====
+
+# DEEP WORK PLAN — Task: [task name]
+Date: [ ] · Classified by: Orchestrator (Gate 0) · Class: DEEP WORK
+
+## 1. Why this is Deep Work
+[Which classification criteria apply: multi-session / rich artifact / iterative-visual quality / long-running compute / high cost of mediocre. One or two lines.]
+
+## 2. The pipeline
+[The scripts/generators that produce the artifact, and how to re-run them end-to-end. Manual steps are listed explicitly and marked exploration-only.]
+
+| Step | Script / tool | Input | Output artifact |
+|---|---|---|---|
+| | | | |
+
+## 3. Stages & checkpoints
+[Each stage ends with: artifact(s) on disk + STATUS.md updated + verification result.]
+
+| # | Stage | Artifact(s) | Verification | Status |
+|---|---|---|---|---|
+| 1 | | | | |
+
+## 4. Quality rubric (defined BEFORE production)
+[The criteria that make this result top-tier, each with its pass threshold. The checker scores against this table; the maker does not grade their own work.]
+
+| Criterion | How it is evidenced | Pass threshold |
+|---|---|---|
+| | | |
+
+## 5. Budgets
+- Iterations: [N] · Sessions: [N] · Compute/time: [ ]
+- On exhaustion: checkpoint cleanly, report score + gaps + next actions. Lowering any rubric threshold or the scope needs the user's written approval.
+
+## 6. Iteration log
+| # | Score vs rubric | Fix list | Changed in pipeline |
+|---|---|---|---|
+| 1 | | | |
+
+## 7. Current state (update at every session end)
+Stage: [ ] · Rubric score: [ ] · Evidence: [paths] · Next action: [exact step]
+
+
+---
+
 # ===== TEMPLATE — templates/FAILURE-REPORT.template.md =====
 
 # FAILURE REPORT — [Task name] | Gate: [ ] | Date/Time: [ ]
@@ -7005,7 +7185,8 @@ Date: [ ] · Reported by: [role] · Artifact: [file name]
 - [Work performed, in order. Name the artifact(s) produced or changed.]
 
 ## 3. Verification results
-[How the work was checked, and the evidence: logs, screenshots, file:line references, measured values.]
+[How the work was checked, and the evidence: logs, screenshots, file:line references, measured values.
+Every claim states its exact scope — what ran, where, and which dimensions it covered.]
 
 Gate test cases: Total: [N] · PASS: [N] · FAIL: [N] · BLOCKED: [N]
 
@@ -7015,19 +7196,31 @@ Gate test cases: Total: [N] · PASS: [N] · FAIL: [N] · BLOCKED: [N]
 
 [Any FAIL follows the Test-Case Gate law: full stop + a Failure Report. Any BLOCKED case is listed here with its reason — a gate with a BLOCKED case is not PASS.]
 
-## 4. Open issues & risks
+## 4. Coverage matrix (mandatory)
+[One row per mandatory item of this gate: the role's gate-checklist items, the spec's success criteria, and every standard the gate invokes (for UI work, all five interface states: normal, loading, empty, error, success). A mandatory item with no test case is BLOCKED by definition — leave its Test case cell as `NONE` and its Result as `BLOCKED`; the gate cannot be PASS while any row is not PASS. Evidence paths are relative to this report's folder and must point to real, non-empty files.]
+
+| Mandatory item | Test case(s) | Evidence | Result (PASS / FAIL / BLOCKED) |
+|---|---|---|---|
+| [item] | TC-… | [evidence file path] | |
+
+## 5. Not tested / not covered (mandatory)
+[List everything in this gate's scope that was NOT exercised, with the reason. An empty list must be written as the single line `None.` — never delete this section. Any item listed here that belongs to the gate's mandatory scope blocks PASS, unless the user accepted the gap in writing in STATUS.md — mark such items `[ACCEPTED GAP]`. Items outside the gate's scope are marked `[OUT OF SCOPE]`.]
+
+- [Item not tested — reason]
+
+## 6. Open issues & risks
 - [Issue / risk, its owner, and what it blocks — or "None known".]
 
-## 5. Conditions to pass this gate
+## 7. Conditions to pass this gate
 - [ ] [Condition — from the role's gate checklist and the spec's success criteria]
 
-## 6. Recommended next step
+## 8. Recommended next step
 [One concrete step: the next gate, a rework item, or a decision the user must make.]
 
-## 7. Status
+## 9. Status
 NOT STARTED / IN PROGRESS / AWAITING APPROVAL / COMPLETE
 
-**Rule: never mark COMPLETE unless every condition in §5 is met.** This status is the role's own report; the gate verdict itself (PASS / REWORK / STOP) belongs to the user and is recorded in STATUS.md by the Orchestrator.
+**Rules: never mark COMPLETE unless every condition in §7 is met, every coverage-matrix row in §4 is PASS, and §5 holds no unaccepted mandatory gap.** Before requesting the user's verdict, run `python3 scripts/verify-gate.py <this-report.md>` — a report the script rejects is not submittable, whatever its text claims. This status is the role's own report; the gate verdict itself (PASS / REWORK / STOP) belongs to the user and is recorded in STATUS.md by the Orchestrator.
 
 
 ---

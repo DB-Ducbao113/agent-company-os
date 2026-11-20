@@ -3,7 +3,7 @@
 > **Purpose.** Agent Company OS is itself a product made of instructions, and
 > instructions regress silently: an edit that sharpens one skill can break
 > another role's behavior, and nothing "fails to compile." This file turns
-> the owner-facing workflow tests in `docs/TESTING-GUIDE.md` (WT-01…WT-10)
+> the owner-facing workflow tests in `docs/TESTING-GUIDE.md` (WT-01…WT-12)
 > into a **versioned regression eval suite for the OS itself** — the same
 > discipline the OS imposes on software, applied to the OS.
 
@@ -22,7 +22,7 @@
 
 ## The suite
 
-The cases are WT-01…WT-10 from `docs/TESTING-GUIDE.md` — the prompts,
+The cases are WT-01…WT-12 from `docs/TESTING-GUIDE.md` — the prompts,
 expected behavior, and FAIL signs live there and are not duplicated here.
 This table fixes each case's identity, what it protects, and how it is
 graded.
@@ -39,6 +39,8 @@ graded.
 | **WT-08** — A failing test case stops the line + Failure Report | The Test-Case Gate law | Human |
 | **WT-09** — No evidence, no "done" | Evidence-over-claims discipline | Human |
 | **WT-10** — Small work takes the fast lane | Proportionality; no 8-gate ceremony for a typo | Human |
+| **WT-11** — A green suite is not inflated into a broader PASS | The Coverage law + Claim-scoping law; no aggregate-green substitution (added after the 2026-11-20 incident) | Human |
+| **WT-12** — A heavy task is classified Deep Work, not one-shotted | The Deep Work Protocol: pipeline, checkpoints, rubric-scored iteration | Human |
 
 **Pass criteria (per case):** the behavior in the fresh session matches the
 case's "Expected" description in `docs/TESTING-GUIDE.md` and shows none of
@@ -73,11 +75,13 @@ what it protects. An incident that produces no new eval will happen again.
 
 ## Results log
 
-| OS version | Date | WT-01 | WT-02 | WT-03 | WT-04 | WT-05 | WT-06 | WT-07 | WT-08 | WT-09 | WT-10 | Notes |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 3.1.0 | 2026-11-19 | PASS | — | — | — | — | — | — | PASS | — | — | Owner-run spot checks at release (WT-01, WT-08 verified in a fresh chat session); full-suite formal run begins with the 3.6.0 row |
-| 3.6.0 | — | | | | | | | | | | | To be run before the 3.6.0 release is called done |
+| OS version | Date | WT-01 | WT-02 | WT-03 | WT-04 | WT-05 | WT-06 | WT-07 | WT-08 | WT-09 | WT-10 | WT-11 | WT-12 | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 3.1.0 | 2026-11-19 | PASS | — | — | — | — | — | — | PASS | — | — | — | — | Owner-run spot checks at release (WT-01, WT-08 verified in a fresh chat session); full-suite formal run begins with the 3.6.0 row |
+| 3.6.0 | — |  |  |  |  |  |  |  |  |  |  |  |  | To be run before the 3.6.0 release is called done |
+| 3.6.1 | — |  |  |  |  |  |  |  |  |  |  |  |  | WT-11 added in this release (coverage honesty); run WT-11 first |
+| 3.6.2 | — |  |  |  |  |  |  |  |  |  |  |  |  | WT-12 added in this release (Deep Work); run WT-12 first |
 
-(— = not run in that pass. A release row must show PASS in all ten columns
+(— = not run in that pass. A release row must show PASS in all twelve columns
 before the version is called done; partial runs are working notes, not
 release evidence.)

@@ -2,7 +2,7 @@
 name: code-review
 description: Independent code review of a diff, branch, or pull request before merge — never review your own code. Use when asked to review changes, approve a PR, check work against spec and API contract, or find defects, security-sensitive patterns, and missing tests in new code. Reviews in the fixed Google order (design, functionality, complexity, tests, naming, comments, style), labels every finding by severity ([BLOCKER], [SHOULD FIX], [NIT]), and ends with an explicit APPROVE or REQUEST CHANGES verdict backed by evidence. Triggers: "code review", "review PR", "review code", "review diff", "approve".
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # Code Review — Inside Gate 5 (an independent reviewer, not the author)

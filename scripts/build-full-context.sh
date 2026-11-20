@@ -27,6 +27,7 @@ add "ENTRY POINT" "AGENTS.md"
 add "CONSTITUTION" "constitution/CONSTITUTION.md"
 add "PROJECT PROFILE TEMPLATE" "constitution/PROJECT-PROFILE.template.md"
 add "MASTER WORKFLOW" "workflow/MASTER-WORKFLOW.md"
+add "DEEP WORK PROTOCOL" "workflow/DEEP-WORK-PROTOCOL.md"
 add "ROLE CHAIN" "workflow/ROLE-CHAIN.md"
 add "ROUTING MATRIX" "workflow/ROUTING-MATRIX.md"
 for d in skills/*/; do

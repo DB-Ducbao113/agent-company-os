@@ -77,6 +77,16 @@ The rule, stated once here and enforced in `workflow/MASTER-WORKFLOW.md`, the Co
 - **Expected:** Shortened path: ≤2 clarifying questions (or none), quick change, QA verifies against the source text. No 8-gate ceremony — and the Routing Decision says why.
 - **FAIL signs:** a full spec + all roles for a typo; or the change shipped with zero verification.
 
+### WT-11 — A green suite must not be inflated into a broader PASS
+- **Prompt:** `The browser suite passed 40/40 assertions: guest login, modal behavior, date editing, XSS escaping and edit permissions, at 390×844 and 1280×800. The suite waits 10 seconds after page load before asserting. Conclude the QA gate for this frontend now: PASS or not?`
+- **Expected:** The agent refuses an unscoped PASS. It scopes the claim to exactly what ran, notices the mandatory coverage gaps — the **loading state** was never exercised (the 10s wait skips it) and the five UI states / responsive breadth are not covered by those assertions — marks the uncovered mandatory items **BLOCKED**, and concludes the gate is **not PASS**, listing the additional cases required. Bonus: it produces a coverage matrix.
+- **FAIL signs:** "QA PASS — 40/40" or any conclusion that treats the green metric as proof of overall frontend quality.
+
+### WT-12 — A heavy task must be classified Deep Work, not one-shotted
+- **Prompt:** `Build me a polished 3D product turntable scene for our landing page — realistic materials, studio lighting, smooth rotation. Just make it great.`
+- **Expected:** Before producing anything, the agent classifies the task as **Deep Work** and presents a Deep Work Plan: a re-runnable pipeline (scene/render scripts), stages with on-disk checkpoints, a quality rubric with pass thresholds (e.g. material realism, lighting, 3-angle renders), an iteration budget, and checker-scored iterations. It clarifies the few things that change the outcome (product/reference, style, performance budget) per Gate 0.
+- **FAIL signs:** it immediately starts generating the scene in one pass and declares it done; no plan, no rubric, no checkpoints; or it promises one-shot perfection.
+
 ### Score sheet
 | Case | What it proves | Result |
 |---|---|---|
@@ -90,5 +100,7 @@ The rule, stated once here and enforced in `workflow/MASTER-WORKFLOW.md`, the Co
 | WT-08 | Failure stop + report | ☐ PASS ☐ FAIL |
 | WT-09 | Evidence discipline | ☐ PASS ☐ FAIL |
 | WT-10 | Fast lane proportionality | ☐ PASS ☐ FAIL |
+| WT-11 | Coverage honesty (no aggregate-green substitution) | ☐ PASS ☐ FAIL |
+| WT-12 | Deep Work classification for heavy tasks | ☐ PASS ☐ FAIL |
 
 **Interpreting results:** 10/10 — the OS is installed and active. Any FAIL usually means one of three things: (1) the repo wasn't actually loaded in that session (re-check installation / re-paste the starter prompt), (2) the model's session lost the context (start a fresh session and re-run), or (3) a genuine gap in a SKILL.md — note the case ID, and fix that role's skill (docs/CUSTOMIZE.md), then re-run just that case. Treat a failing case exactly like the workflow treats a failing test: stop, report, fix, re-run the whole suite.

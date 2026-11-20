@@ -53,15 +53,31 @@ for skill in sorted(os.listdir("skills")):
 with zipfile.ZipFile("dist/chatgpt-skills-bundle.zip", "w", zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir("dist/chatgpt-skills")):
         z.write(f"dist/chatgpt-skills/{f}", f)
-tmp = "dist/_plugin_build/agent-company-os"
+tmp = "dist/_plugin_build"
 shutil.rmtree("dist/_plugin_build", ignore_errors=True)
 os.makedirs(f"{tmp}/skills")
 version = json.load(open(".claude-plugin/marketplace.json"))["metadata"]["version"]
-json.dump({"name": "agent-company-os", "version": version,
+manifest = {"name": "agent-company-os", "version": version,
   "description": "A gate-based operating system for AI agents: 10 role skills (Orchestrator, BA, Architect, UI/UX, Security, Developer, Code Review, Integration, QA, Release) with specs, routing, test-case gates and evidence-based handoffs.",
   "author": {"name": "Nguyen Duc Bao"},
-  "onboardingSkill": "./skills/orchestrator-intake/SKILL.md"},
-  open(f"{tmp}/plugin.json", "w"), indent=2)
+  "skills": "./skills/",
+  "onboardingSkill": "./skills/orchestrator-intake/SKILL.md"}
+# ChatGPT's plugin-archive validator requires the manifest at the ARCHIVE ROOT under
+# .codex-plugin/ (or .agent-plugin/ / .claude-plugin/) and plugin content such as
+# skills/*/SKILL.md at the root — nothing may be nested under a top-level folder.
+for d in (".codex-plugin", ".agent-plugin", ".claude-plugin"):
+    os.makedirs(f"{tmp}/{d}")
+    m = dict(manifest)
+    if d in (".codex-plugin", ".agent-plugin"):
+        # ChatGPT's validator requires an `interface` object in these manifests.
+        m["interface"] = {
+          "displayName": "Agent Company OS",
+          "shortDescription": "A gate-based operating system for AI agents: 10 role skills, specs, routing and test-case gates.",
+          "longDescription": "Agent Company OS runs AI work like a company: an Orchestrator clarifies and specs every task at Gate 0, then routes it through Business Analyst, Solution Architect, UI/UX, Security, Developer, Code Review, Integration, QA and Release roles. Every gate must pass 100% of its test cases with evidence before the next begins. Install once and start any task with 'Run Agent Company OS: ...'.",
+          "developerName": "Nguyen Duc Bao",
+          "category": "Productivity",
+          "capabilities": ["Read"]}
+    json.dump(m, open(f"{tmp}/{d}/plugin.json", "w"), indent=2)
 for skill in sorted(os.listdir("skills")):
     shutil.copytree(f"skills/{skill}", f"{tmp}/skills/{skill}")
     os.makedirs(f"{tmp}/skills/{skill}/agents", exist_ok=True)

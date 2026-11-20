@@ -53,6 +53,18 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 13. **Resume protocol:** At the start of any session on an existing task, first reconstruct where the task
     stands from its task folder — `STATUS.md`, the artifacts present, and the gate verdicts recorded — and
     state the next action before doing anything. Never restart a task from memory or from chat history alone.
+14. **Coverage & claim-scoping (no PASS without coverage):** A gate verdict requires a **coverage matrix**
+    (every mandatory checklist item → executed test case → evidence artifact → result). A mandatory item
+    with no test case is automatically BLOCKED — 100% of an incomplete suite is not a PASS. Conclusions
+    must state their exact scope; an aggregate metric never proves an untested criterion
+    ("aggregate-green substitution" is a process violation). Every gate report lists what was **not**
+    tested. Gate reports are machine-checked with `scripts/verify-gate.py` before they reach the user.
+15. **Deep Work (heavy tasks):** At Gate 0, classify the task: multi-session, rich-artifact (3D, full app,
+    video, long document), iterative/visual-quality, or long-compute work is **Deep Work** and follows
+    `workflow/DEEP-WORK-PROTOCOL.md` — a Deep Work Plan (`templates/DEEP-WORK-PLAN.template.md`),
+    production by re-runnable pipeline scripts, on-disk checkpoints per stage, and iterations scored
+    against a pre-declared rubric by a checker. When budget runs out: checkpoint and report the gap —
+    never quietly lower the quality bar or the scope to fit.
 
 ## Quick Map — what to read when
 
@@ -66,6 +78,7 @@ Every role skill in `skills/` is written in exactly that structure. Follow it.
 | Finding an external skill for a role | `skills-index/SKILLS-INDEX.md` |
 | A worked example | `examples/example-redesign-ui.md`, `examples/example-feature-end-to-end.md` |
 | A test case failed | `templates/FAILURE-REPORT.template.md` + the Test-Case Gate law in `workflow/MASTER-WORKFLOW.md` |
+| A heavy task (3D, full app, video, multi-session) | `workflow/DEEP-WORK-PROTOCOL.md` + `templates/DEEP-WORK-PLAN.template.md` |
 | A term is unclear | `docs/GLOSSARY.md` |
 
 ## Working folder convention for each task (the agent creates this when Gate 0 passes)

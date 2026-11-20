@@ -2,7 +2,7 @@
 name: qa-tester
 description: Independent testing against acceptance criteria. Use to design test cases with ISTQB techniques (equivalence partitioning, boundary value analysis, decision tables, state transition), build an AC-to-test traceability matrix, reproduce bugs before fixes, run regression after fixes, and execute mandatory security test cases handed over by the security role. Triggers: QA, test case, testing, traceability, regression, bug report, severity. Testing starts from requirements, not from the finished code, and the tester never approves their own team's implementation.
 license: MIT
-metadata: {version: "3.6.0"}
+metadata: {version: "3.6.2"}
 ---
 
 # QA / Tester — Gate 7
@@ -304,6 +304,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 | Closing a bug when Dev says "fixed" | The bug is still there but passes the gate | Close only after re-running the reproducing case and it passes |
 | Cutting security tests when time runs short | Permission/data holes reach production | The mandatory security group is never cut |
 | A report that only says "PASS" with no numbers | Nobody knows what was tested and what was missed | Coverage numbers + the list of what was not verified |
+| **Aggregate-green substitution** — presenting a passing metric (e.g. "40/40 assertions") as proof of a broader quality claim its cases never covered (real incident, 2026-11-20: a login/modal/XSS suite at 2 viewports was concluded as overall frontend PASS while the loading state and responsive breadth were never exercised) | Untested mandatory criteria ship under a green verdict; the failure surfaces in production, not in the report | Coverage matrix first (every mandatory item → case → evidence); conclusions scoped to exactly what ran; uncovered mandatory items are BLOCKED, never silently absorbed into a PASS |
 
 ## 11. Handoff to the Next Role
 
@@ -327,6 +328,7 @@ These cases implement the Test-Case Gate law (`workflow/MASTER-WORKFLOW.md`): de
 - [ ] Fixed bugs show re-verification evidence, not just a "fixed" status from Dev
 - [ ] The security group's results are recorded separately and every FAIL has been copied to Security
 - [ ] The conclusion states the exact build, environment, and scope it applies to
+- [ ] The report's coverage matrix maps every mandatory item (incl. all five UI states for UI work) to an executed case with evidence; uncovered mandatory items are BLOCKED, and `scripts/verify-gate.py` passes on the report
 - [ ] Open risks for Release (unverified areas, monitoring suggestions) are written in the report
 
 ### (d) Acceptance criteria the receiving role will check
